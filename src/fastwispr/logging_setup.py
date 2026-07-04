@@ -14,6 +14,7 @@ def app_log_path() -> Path:
 def configure_file_logging(*, force: bool = False) -> Path:
     path = app_log_path()
     path.parent.mkdir(parents=True, exist_ok=True)
+    path.touch(exist_ok=True)
     logging.basicConfig(
         filename=str(path),
         level=logging.INFO,

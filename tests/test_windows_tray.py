@@ -75,4 +75,19 @@ def test_tray_controller_stops_running_process(tmp_path: Path):
 def test_tray_menu_labels_are_stable(tmp_path: Path):
     controller = FastWisprTrayController(config_path=tmp_path / "config.toml")
 
-    assert controller.menu_labels() == ["Start FastWispr", "Stop FastWispr", "Settings", "Quit"]
+    assert controller.menu_labels() == ["Start FastWispr", "Stop FastWispr", "Settings", "Open Logs", "Quit"]
+
+
+def test_tray_controller_opens_log_file(tmp_path: Path):
+    opened = []
+    log_path = tmp_path / "fastwispr.log"
+    controller = FastWisprTrayController(
+        config_path=tmp_path / "config.toml",
+        log_path_factory=lambda: log_path,
+        open_path_callback=opened.append,
+    )
+
+    controller.open_logs()
+
+    assert opened == [log_path]
+    assert log_path.exists()

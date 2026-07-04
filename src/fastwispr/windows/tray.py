@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+import os
 import subprocess
 import sys
 from typing import Callable, Sequence
 
 from ..config import default_config_path
+from ..logging_setup import app_log_path
 
 ProcessFactory = Callable[[Sequence[str]], subprocess.Popen]
 
@@ -19,12 +21,16 @@ class FastWisprTrayController:
         module_mode: bool | None = None,
         process_factory: ProcessFactory | None = None,
         settings_callback: Callable[[Path], None] | None = None,
+        log_path_factory: Callable[[], Path] | None = None,
+        open_path_callback: Callable[[Path], None] | None = None,
     ):
         self.config_path = config_path or default_config_path()
         self.python_executable = python_executable or sys.executable
         self.module_mode = module_mode if module_mode is not None else not bool(getattr(sys, "frozen", False))
         self.process_factory = process_factory or (lambda command: subprocess.Popen(list(command)))
         self.settings_callback = settings_callback
+        self.log_path_factory = log_path_factory or app_log_path
+        self.open_path_callback = open_path_callback or open_path
         self.process: subprocess.Popen | None = None
 
     def dictation_command(self) -> list[str]:
@@ -60,6 +66,12 @@ class FastWisprTrayController:
 
         open_settings_window(self.config_path)
 
+    def open_logs(self, *_args: object) -> None:
+        log_path = self.log_path_factory()
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_path.touch(exist_ok=True)
+        self.open_path_callback(log_path)
+
     def quit(self, icon=None, _item=None) -> None:
         self.stop_dictation()
         if icon is not None:
@@ -69,7 +81,7 @@ class FastWisprTrayController:
         return self.process is not None and self.process.poll() is None
 
     def menu_labels(self) -> list[str]:
-        return ["Start FastWispr", "Stop FastWispr", "Settings", "Quit"]
+        return ["Start FastWispr", "Stop FastWispr", "Settings", "Open Logs", "Quit"]
 
 
 def run_tray(config_path: Path | None = None, *, autostart: bool = True) -> None:  # pragma: no cover - requires desktop tray
@@ -81,11 +93,19 @@ def run_tray(config_path: Path | None = None, *, autostart: bool = True) -> None
         pystray.MenuItem("Start FastWispr", controller.start_dictation),
         pystray.MenuItem("Stop FastWispr", controller.stop_dictation),
         pystray.MenuItem("Settings", controller.open_settings),
+        pystray.MenuItem("Open Logs", controller.open_logs),
         pystray.MenuItem("Quit", controller.quit),
     )
     if autostart:
         controller.start_dictation()
     icon.run()
+
+
+def open_path(path: Path) -> None:  # pragma: no cover - OS integration
+    if hasattr(os, "startfile"):
+        os.startfile(str(path))  # type: ignore[attr-defined]
+        return
+    subprocess.Popen(["xdg-open", str(path)])
 
 
 def _create_icon_image():  # pragma: no cover - visual asset

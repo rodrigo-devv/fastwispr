@@ -251,6 +251,14 @@ Do not launch anything from `build\`; that directory is PyInstaller scratch spac
 
 FastWispr enforces one app/tray instance with Windows named mutexes. Opening `FastWispr.exe` again shows a "FastWispr já está aberto" message and exits instead of registering duplicate hotkeys.
 
+Install the login startup shortcut directly to the packaged exe:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\install-startup-shortcut.ps1
+```
+
+The shortcut target is `dist\FastWispr\FastWispr.exe` with no PowerShell wrapper or arguments.
+
 ## Logs
 
 FastWispr writes app logs to:
@@ -265,6 +273,18 @@ On a normal Windows user profile that looks like:
 C:\Users\<you>\AppData\Roaming\FastWispr\fastwispr.log
 ```
 
+The tray menu includes `Open Logs`, which creates and opens this file.
+
+## STT presets
+
+Settings includes three local faster-whisper presets:
+
+| Preset | Model | Device | Compute type |
+|---|---|---|---|
+| Fast | `base` | `cpu` | `int8` |
+| Balanced | `small` | `cpu` | `int8` |
+| Accurate | `medium` | `cpu` | `int8` |
+
 ## Verification
 
 Current baseline:
@@ -276,7 +296,7 @@ python -m pytest -q
 Expected on the current version:
 
 ```text
-89 passed
+92 passed
 ```
 
 Windows smoke:
@@ -302,7 +322,6 @@ Near-term:
 
 - Add a proper installer/update path around the one-folder build.
 - Improve the overlay polish while keeping it small and non-distracting.
-- Add configurable STT parameters for speed/accuracy trade-offs.
 - Add optional encrypted sync for dictionary/snippets/settings.
 
 Later:

@@ -24,9 +24,11 @@ def test_windows_startup_scripts_install_and_remove_fastwispr_shortcut():
     build_text = build.read_text(encoding="utf-8")
 
     assert "FastWispr.lnk" in install_text
-    assert "start-ui.ps1" in install_text
-    assert '$Hotkey = "ctrl+space"' in install_text
-    assert "-Hotkey $Hotkey" in install_text
+    assert "dist\\FastWispr\\FastWispr.exe" in install_text
+    assert "start-ui.ps1" not in install_text
+    assert "powershell.exe" not in install_text.lower()
+    assert "$Shortcut.TargetPath = $AppExe" in install_text
+    assert "$Shortcut.IconLocation = \"$AppExe,0\"" in install_text
     assert "Startup" in install_text
     assert "FastWispr.lnk" in uninstall_text
     assert "Remove-Item" in uninstall_text
