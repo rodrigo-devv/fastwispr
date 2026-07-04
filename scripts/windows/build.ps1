@@ -36,6 +36,7 @@ function Invoke-PyInstallerBuild {
         "--hidden-import", "fastwispr.windows.mouse_buttons",
         "--hidden-import", "fastwispr.windows.overlay",
         "--hidden-import", "fastwispr.windows.sounds",
+        "--hidden-import", "winsound",
         "--hidden-import", "keyboard",
         "--hidden-import", "sounddevice",
         "--hidden-import", "pyautogui",
@@ -104,6 +105,7 @@ if (!(Test-Path $CliSileroVad)) {
 }
 
 Invoke-External "Verifying packaged CLI executable." { & $CliExe windows-smoke }
+Invoke-External "Verifying packaged CLI sounds." { & $CliExe sound-smoke }
 
 Write-Host "Verifying packaged windowed app executable." -ForegroundColor Yellow
 $AppSmoke = Start-Process -FilePath $AppExe -ArgumentList "windows-smoke" -Wait -PassThru

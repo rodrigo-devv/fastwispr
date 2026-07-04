@@ -82,22 +82,22 @@ def wait_for_finish(app: HoldToTalkDictationApp) -> None:
 
 def test_hold_to_talk_plays_start_and_stop_sounds(monkeypatch):
     calls = []
-    monkeypatch.setattr(hold_to_talk, "play_recording_started", lambda: calls.append("start"))
-    monkeypatch.setattr(hold_to_talk, "play_recording_stopped", lambda: calls.append("stop"))
+    monkeypatch.setattr(hold_to_talk, "play_recording_started", lambda **kwargs: calls.append(("start", kwargs)))
+    monkeypatch.setattr(hold_to_talk, "play_recording_stopped", lambda **kwargs: calls.append(("stop", kwargs)))
     app = HoldToTalkDictationApp(FakeController(), FakeRecorder(), FakeOverlay(), FakeListener())
 
     app.start_recording()
     app.stop_recording()
     wait_for_finish(app)
 
-    assert calls[:2] == ["start", "stop"]
+    assert calls[:2] == [("start", {"threaded": False}), ("stop", {})]
 
 
 def test_stop_sound_plays_after_recorder_stop_is_signaled(monkeypatch):
     calls = []
     app = HoldToTalkDictationApp(FakeController(), FakeRecorder(), FakeOverlay(), FakeListener())
-    monkeypatch.setattr(hold_to_talk, "play_recording_started", lambda: calls.append(("start", False)))
-    monkeypatch.setattr(hold_to_talk, "play_recording_stopped", lambda: calls.append(("stop", app.stop_event.is_set())))
+    monkeypatch.setattr(hold_to_talk, "play_recording_started", lambda **kwargs: calls.append(("start", False)))
+    monkeypatch.setattr(hold_to_talk, "play_recording_stopped", lambda **kwargs: calls.append(("stop", app.stop_event.is_set())))
 
     app.start_recording()
     app.stop_recording()
@@ -107,7 +107,7 @@ def test_stop_sound_plays_after_recorder_stop_is_signaled(monkeypatch):
 
 
 def test_hanging_recorder_does_not_transcribe_partial_audio(monkeypatch):
-    monkeypatch.setattr(hold_to_talk, "play_recording_started", lambda: None)
+    monkeypatch.setattr(hold_to_talk, "play_recording_started", lambda **kwargs: None)
     monkeypatch.setattr(hold_to_talk, "play_recording_stopped", lambda: None)
     recorder = HangingRecorder()
     controller = FakeController()
@@ -131,7 +131,7 @@ def test_hanging_recorder_does_not_transcribe_partial_audio(monkeypatch):
 
 
 def test_toggle_mode_starts_and_stops_on_mouse_down(monkeypatch):
-    monkeypatch.setattr(hold_to_talk, "play_recording_started", lambda: None)
+    monkeypatch.setattr(hold_to_talk, "play_recording_started", lambda **kwargs: None)
     monkeypatch.setattr(hold_to_talk, "play_recording_stopped", lambda: None)
     listener = FakeListener()
     app = HoldToTalkDictationApp(FakeController(), FakeRecorder(), FakeOverlay(), listener, activation_mode="toggle")
@@ -153,7 +153,7 @@ def test_toggle_mode_starts_and_stops_on_mouse_down(monkeypatch):
 
 
 def test_skipped_empty_dictation_hides_overlay_without_paste_state(monkeypatch):
-    monkeypatch.setattr(hold_to_talk, "play_recording_started", lambda: None)
+    monkeypatch.setattr(hold_to_talk, "play_recording_started", lambda **kwargs: None)
     monkeypatch.setattr(hold_to_talk, "play_recording_stopped", lambda: None)
     overlay = FakeOverlay()
     app = HoldToTalkDictationApp(FakeController(final=""), FakeRecorder(), overlay, FakeListener())

@@ -98,7 +98,7 @@ class HoldToTalkDictationApp:
         self.record_error = None
         self.recording = True
         self.record_started_at = time.monotonic()
-        play_recording_started()
+        play_recording_started(threaded=False)
         self.overlay.set_level(0.0)
         self.overlay.set_state("recording")
         self.record_thread = Thread(target=self._record_audio, name="fastwispr-record", daemon=True)

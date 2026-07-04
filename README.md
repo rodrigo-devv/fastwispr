@@ -244,6 +244,7 @@ Double-clicking `FastWispr.exe` starts the tray app by default. Use `FastWisprCl
 
 ```powershell
 .\dist\FastWisprCli\FastWisprCli.exe windows-smoke
+.\dist\FastWisprCli\FastWisprCli.exe sound-smoke
 .\dist\FastWisprCli\FastWisprCli.exe history --limit 10
 ```
 
@@ -296,7 +297,7 @@ python -m pytest -q
 Expected on the current version:
 
 ```text
-92 passed
+95 passed
 ```
 
 Windows smoke:
@@ -316,11 +317,23 @@ settings: ok
 single-instance: ok
 ```
 
+Sound smoke:
+
+```powershell
+python -m fastwispr.cli sound-smoke
+```
+
+Expected:
+
+```text
+sound: ok
+```
+
 ## Roadmap
 
 Near-term:
 
-- Add a proper installer/update path around the one-folder build.
+- Keep the one-folder build; no installer is planned while this is Rodrigo-only.
 - Improve the overlay polish while keeping it small and non-distracting.
 - Add optional encrypted sync for dictionary/snippets/settings.
 

@@ -52,6 +52,8 @@ def test_windows_startup_scripts_install_and_remove_fastwispr_shortcut():
     assert "Remove-Item -Recurse -Force $BuildDir" in build_text
     assert '"--hidden-import", "keyboard"' in build_text
     assert '"--hidden-import", "sounddevice"' in build_text
+    assert '"--hidden-import", "winsound"' in build_text
+    assert "sound-smoke" in build_text
     assert "Invoke-External" in setup_text
     assert "Invoke-External" in build_text
     assert "from fastwispr.cli import main" in (ROOT / "src" / "fastwispr" / "__main__.py").read_text(encoding="utf-8")

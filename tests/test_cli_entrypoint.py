@@ -1,4 +1,4 @@
-from fastwispr.cli import normalize_argv_for_packaged_app, run_with_single_instance
+from fastwispr.cli import normalize_argv_for_packaged_app, run_with_single_instance, sound_smoke
 
 
 class FakeGuard:
@@ -74,3 +74,15 @@ def test_run_with_single_instance_notifies_and_skips_action_when_duplicate():
     assert result == 0
     assert calls == []
     assert notices == ["FastWispr já está aberto."]
+
+
+def test_cli_sound_smoke_plays_start_and_stop_cues(capsys):
+    calls = []
+
+    assert sound_smoke(
+        play_started=lambda threaded=False: calls.append(("start", threaded)) or True,
+        play_stopped=lambda threaded=False: calls.append(("stop", threaded)) or True,
+    ) == 0
+
+    assert calls == [("start", False), ("stop", False)]
+    assert "sound: ok" in capsys.readouterr().out

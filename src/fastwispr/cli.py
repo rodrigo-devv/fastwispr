@@ -93,6 +93,7 @@ def build_parser() -> argparse.ArgumentParser:
     settings_sub.add_parser("open", help="Open settings")
 
     sub.add_parser("windows-smoke", help="Check optional Windows adapter imports")
+    sub.add_parser("sound-smoke", help="Play start/stop notification sounds")
     sub.add_parser("run-windows-app", help="Start the Windows hotkey dictation overlay")
     tray = sub.add_parser("run-windows-tray", help="Start the Windows tray controller")
     tray.add_argument("--no-autostart", action="store_true", help="Do not launch dictation immediately")
@@ -220,6 +221,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "windows-smoke":
         return windows_smoke()
 
+    if args.command == "sound-smoke":
+        return sound_smoke()
+
     if args.command == "run-windows-app":
         return run_with_single_instance(
             ENGINE_MUTEX_NAME,
@@ -255,6 +259,21 @@ def run_with_single_instance(
         logging.getLogger("fastwispr.cli").info("single instance already running mutex=%s", mutex_name)
         notifier(already_running_message)
     return 0
+
+
+def sound_smoke(*, play_started=None, play_stopped=None) -> int:
+    if play_started is None or play_stopped is None:
+        from .windows.sounds import play_recording_started, play_recording_stopped
+
+        play_started = play_recording_started
+        play_stopped = play_recording_stopped
+    started_ok = bool(play_started(threaded=False))
+    stopped_ok = bool(play_stopped(threaded=False))
+    if started_ok and stopped_ok:
+        print("sound: ok")
+        return 0
+    print("sound: unavailable", file=sys.stderr)
+    return 1
 
 
 def windows_smoke() -> int:
