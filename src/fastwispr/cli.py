@@ -10,6 +10,7 @@ from typing import Any
 
 from .app import run_windows_app
 from .audio_stats import analyze_wav
+from .backup import import_backup, write_backup
 from .config import Config, load_config, resolve_config_path
 from .db import DictationEvent, Store, init_db
 from .pipeline import process_text_with_store
@@ -68,8 +69,21 @@ def build_parser() -> argparse.ArgumentParser:
     config_set.add_argument("key")
     config_set.add_argument("value")
 
+    backup = sub.add_parser("backup", help="Export or import config, dictionary, and snippets")
+    backup_sub = backup.add_subparsers(dest="backup_command")
+    backup_export = backup_sub.add_parser("export", help="Write a portable JSON backup")
+    backup_export.add_argument("path")
+    backup_import = backup_sub.add_parser("import", help="Import a portable JSON backup")
+    backup_import.add_argument("path")
+
+    settings = sub.add_parser("settings", help="Open the Windows settings UI")
+    settings_sub = settings.add_subparsers(dest="settings_command")
+    settings_sub.add_parser("open", help="Open settings")
+
     sub.add_parser("windows-smoke", help="Check optional Windows adapter imports")
     sub.add_parser("run-windows-app", help="Start the Windows hotkey dictation overlay")
+    tray = sub.add_parser("run-windows-tray", help="Start the Windows tray controller")
+    tray.add_argument("--no-autostart", action="store_true", help="Do not launch dictation immediately")
     return parser
 
 
@@ -150,11 +164,38 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         parser.error("config requires show or set")
 
+    if args.command == "backup":
+        path = resolve_config_path(args.config)
+        with Store(config.db_path) as store:
+            if args.backup_command == "export":
+                write_backup(path, store, Path(args.path))
+                print(args.path)
+                return 0
+            if args.backup_command == "import":
+                counts = import_backup(path, store, Path(args.path))
+                print(f"imported dictionary={counts['dictionary']} snippets={counts['snippets']}")
+                return 0
+        parser.error("backup requires export or import")
+
+    if args.command == "settings":
+        if args.settings_command == "open":
+            from .windows.settings_ui import open_settings_window
+
+            open_settings_window(resolve_config_path(args.config))
+            return 0
+        parser.error("settings requires open")
+
     if args.command == "windows-smoke":
         return windows_smoke()
 
     if args.command == "run-windows-app":
         run_windows_app(config)
+        return 0
+
+    if args.command == "run-windows-tray":
+        from .windows.tray import run_tray
+
+        run_tray(resolve_config_path(args.config), autostart=not args.no_autostart)
         return 0
 
     parser.print_help()
@@ -163,18 +204,17 @@ def main(argv: list[str] | None = None) -> int:
 
 def windows_smoke() -> int:
     checks = [
-        ("hotkeys", "fastwispr.windows.hotkeys", "KeyboardHotkeyListener"),
-        ("audio", "fastwispr.windows.audio", "SounddeviceRecorder"),
-        ("paste", "fastwispr.windows.injector", "ClipboardPasteInjector"),
+        ("hotkeys", "fastwispr.windows.hotkeys", "KeyboardHotkeyListener", lambda attr: attr("ctrl+space")),
+        ("audio", "fastwispr.windows.audio", "SounddeviceRecorder", lambda attr: attr()),
+        ("paste", "fastwispr.windows.injector", "ClipboardPasteInjector", lambda attr: attr()),
+        ("tray", "fastwispr.windows.tray", "FastWisprTrayController", lambda attr: attr()),
+        ("settings", "fastwispr.windows.settings_ui", "settings_values_from_config", lambda attr: attr),
     ]
     failed = False
-    for name, module_name, attr in checks:
+    for name, module_name, attr_name, smoke in checks:
         try:
-            module = __import__(module_name, fromlist=[attr])
-            if name == "hotkeys":
-                getattr(module, attr)("ctrl+space")
-            else:
-                getattr(module, attr)()
+            module = __import__(module_name, fromlist=[attr_name])
+            smoke(getattr(module, attr_name))
         except Exception as exc:
             failed = True
             print(f"{name}: unavailable ({exc})", file=sys.stderr)

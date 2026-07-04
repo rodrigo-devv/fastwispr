@@ -38,6 +38,9 @@ It has been manually dogfooded on Windows with normal apps and Path of Exile 2. 
 - **keyboard** for global keyboard hotkeys on Windows.
 - **sounddevice** for microphone recording.
 - **pyperclip + pyautogui** for clipboard-based paste injection.
+- **pystray** for the Windows tray controller.
+- **tkinter** from the Python standard library for the first settings window.
+- **PyInstaller** for the first Windows one-folder build.
 - **pytest** for the cross-platform test suite.
 - **PowerShell scripts** for Windows startup and local runner workflows.
 
@@ -48,14 +51,10 @@ No STT or Windows desktop dependency is imported at package import time unless t
 Run this from normal Windows PowerShell in the repo root:
 
 ```powershell
-py -3.11 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -e ".[windows,stt,test]"
-python -m pytest
-python -m fastwispr.cli windows-smoke
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\setup.ps1
 ```
 
-Start the app:
+Start the tray app:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\windows\start-ui.ps1
@@ -183,7 +182,62 @@ Remove startup shortcut:
 powershell -ExecutionPolicy Bypass -File .\scripts\windows\uninstall-startup-shortcut.ps1
 ```
 
-`start-ui.ps1` intentionally does not install dependencies during login/startup. Install or update dependencies manually with `pip install -e ".[windows,stt,test]"` so startup stays fast and offline-safe.
+`start-ui.ps1` intentionally does not install dependencies during login/startup. Install or update dependencies with:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\setup.ps1
+```
+
+so startup stays fast and offline-safe.
+
+## Tray and settings
+
+The tray controller starts FastWispr as a child process and keeps the dictation engine separate from tray UI code. Menu actions:
+
+```text
+Start FastWispr
+Stop FastWispr
+Settings
+Quit
+```
+
+Open settings directly:
+
+```powershell
+python -m fastwispr.cli settings open
+```
+
+The first settings UI is intentionally simple and uses stdlib `tkinter`; no Electron/Qt tax for a handful of fields.
+
+## Backup export/import
+
+Export config, dictionary, and snippets to JSON:
+
+```powershell
+python -m fastwispr.cli backup export .\fastwispr-backup.json
+```
+
+Import into the current config/database:
+
+```powershell
+python -m fastwispr.cli backup import .\fastwispr-backup.json
+```
+
+Backups intentionally exclude dictation history, raw transcripts, and audio.
+
+## Windows build
+
+Build the first one-folder executable with PyInstaller:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\build.ps1
+```
+
+Output:
+
+```text
+dist\FastWispr\FastWispr.exe
+```
 
 ## Verification
 
@@ -196,7 +250,7 @@ python -m pytest -q
 Expected on the current version:
 
 ```text
-68 passed
+76 passed
 ```
 
 Windows smoke:
@@ -211,18 +265,19 @@ Expected modules:
 hotkeys: ok
 audio: ok
 paste: ok
+tray: ok
+settings: ok
 ```
 
 ## Roadmap
 
 Near-term:
 
-- Package the Windows app so setup does not require cloning a repo.
-- Add a tray icon with start/stop/status controls.
+- Make tray startup fully silent/no-console for daily use.
+- Add a proper installer/update path around the one-folder build.
 - Improve the overlay polish while keeping it small and non-distracting.
-- Add a better setup/update script for Windows dependencies.
 - Add configurable STT parameters for speed/accuracy trade-offs.
-- Add a simple export/import path for dictionary and snippets.
+- Add optional encrypted sync for dictionary/snippets/settings.
 
 Later:
 

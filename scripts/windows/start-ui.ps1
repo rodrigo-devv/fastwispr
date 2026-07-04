@@ -33,7 +33,7 @@ New-Item -ItemType Directory -Force $ConfigDir | Out-Null
 & $Python -m fastwispr.cli --config $ConfigFile config set dictation.min_record_seconds $MinRecordSeconds | Out-Null
 & $Python -m fastwispr.cli --config $ConfigFile config set dictation.min_audio_rms $MinAudioRms | Out-Null
 
-Write-Host "Starting FastWispr." -ForegroundColor Green
+Write-Host "Starting FastWispr tray." -ForegroundColor Green
 if ($Trigger -eq "keyboard") {
     Write-Host "Press $Hotkey to start. Press again to stop/transcribe/paste." -ForegroundColor Yellow
 }
@@ -47,4 +47,4 @@ Write-Host "Language mode: $Language (default pt-en auto-detects EN/PT; use -Lan
 Write-Host "Dictation guard: min $MinRecordSeconds sec, min RMS $MinAudioRms" -ForegroundColor Yellow
 Write-Host "Config: $ConfigFile"
 
-& $Python -m fastwispr.cli --config $ConfigFile run-windows-app
+& $Python -m fastwispr.cli --config $ConfigFile run-windows-tray

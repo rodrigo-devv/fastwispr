@@ -13,7 +13,8 @@ dependencies = []
 
 [project.optional-dependencies]
 stt = ["faster-whisper>=1.0"]
-windows = ["keyboard>=0.13", "sounddevice>=0.4", "pyperclip>=1.8", "pyautogui>=0.9"]
+windows = ["keyboard>=0.13", "sounddevice>=0.4", "pyperclip>=1.8", "pyautogui>=0.9", "pystray>=0.19"]
+packaging = ["pyinstaller>=6"]
 test = ["pytest>=8"]
 
 [project.scripts]

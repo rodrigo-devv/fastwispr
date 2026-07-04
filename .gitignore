@@ -6,3 +6,6 @@ __pycache__/
 *.sqlite3
 *.wav
 .hermes/
+build/
+dist/
+*.spec
