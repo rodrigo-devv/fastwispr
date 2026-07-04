@@ -38,9 +38,12 @@ def test_windows_startup_scripts_install_and_remove_fastwispr_shortcut():
     assert "windows-smoke" in setup_text
     assert "PyInstaller" in build_text
     assert "FastWispr" in build_text
+    assert "FastWisprCli" in build_text
+    assert "--windowed" in build_text
+    assert "FastWisprCli.exe" in build_text
     assert "windows-smoke" in build_text
-    assert "--hidden-import keyboard" in build_text
-    assert "--hidden-import sounddevice" in build_text
+    assert '"--hidden-import", "keyboard"' in build_text
+    assert '"--hidden-import", "sounddevice"' in build_text
     assert "Invoke-External" in setup_text
     assert "Invoke-External" in build_text
     assert "from fastwispr.cli import main" in (ROOT / "src" / "fastwispr" / "__main__.py").read_text(encoding="utf-8")

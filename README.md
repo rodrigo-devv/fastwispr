@@ -44,7 +44,7 @@ It has been manually dogfooded on Windows with normal apps and Path of Exile 2. 
 - **pytest** for the cross-platform test suite.
 - **PowerShell scripts** for Windows startup and local runner workflows.
 
-No STT or Windows desktop dependency is imported at package import time unless that feature is actually used.
+No STT or Windows desktop dependency is imported at package import time unless that feature is actually used. Local transcription does not upload audio; the first model setup can still contact Hugging Face to resolve/download model files if they are not already cached.
 
 ## Quick start on Windows
 
@@ -236,7 +236,29 @@ powershell -ExecutionPolicy Bypass -File .\scripts\windows\build.ps1
 Output:
 
 ```text
-dist\FastWispr\FastWispr.exe
+dist\FastWispr\FastWispr.exe       # windowed tray app; double-click this
+dist\FastWisprCli\FastWisprCli.exe # console diagnostics/CLI
+```
+
+Double-clicking `FastWispr.exe` starts the tray app by default. Use `FastWisprCli.exe` when you want terminal output:
+
+```powershell
+.\dist\FastWisprCli\FastWisprCli.exe windows-smoke
+.\dist\FastWisprCli\FastWisprCli.exe history --limit 10
+```
+
+## Logs
+
+FastWispr writes app logs to:
+
+```text
+%APPDATA%\FastWispr\fastwispr.log
+```
+
+On a normal Windows user profile that looks like:
+
+```text
+C:\Users\<you>\AppData\Roaming\FastWispr\fastwispr.log
 ```
 
 ## Verification
@@ -250,7 +272,7 @@ python -m pytest -q
 Expected on the current version:
 
 ```text
-76 passed
+81 passed
 ```
 
 Windows smoke:
@@ -273,7 +295,6 @@ settings: ok
 
 Near-term:
 
-- Make tray startup fully silent/no-console for daily use.
 - Add a proper installer/update path around the one-folder build.
 - Improve the overlay polish while keeping it small and non-distracting.
 - Add configurable STT parameters for speed/accuracy trade-offs.

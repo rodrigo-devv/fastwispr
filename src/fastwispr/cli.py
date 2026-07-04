@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 from pathlib import Path
 import sys
 from tempfile import TemporaryDirectory
@@ -13,6 +14,7 @@ from .audio_stats import analyze_wav
 from .backup import import_backup, write_backup
 from .config import Config, load_config, resolve_config_path
 from .db import DictationEvent, Store, init_db
+from .logging_setup import configure_file_logging
 from .pipeline import process_text_with_store
 from .stt import make_stt
 
@@ -87,10 +89,22 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def normalize_argv_for_packaged_app(argv: list[str], *, frozen: bool | None = None) -> list[str]:
+    is_frozen = bool(getattr(sys, "frozen", False)) if frozen is None else frozen
+    if is_frozen and not argv:
+        return ["run-windows-tray"]
+    return list(argv)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
-    args = parser.parse_args(argv)
+    effective_argv = normalize_argv_for_packaged_app(sys.argv[1:] if argv is None else argv)
+    args = parser.parse_args(effective_argv)
     config = load_config(args.config)
+
+    if args.command in {"run-windows-app", "run-windows-tray"}:
+        log_path = configure_file_logging()
+        logging.getLogger("fastwispr.cli").info("starting command=%s config=%s log=%s", args.command, resolve_config_path(args.config), log_path)
 
     if args.command == "process":
         with Store(config.db_path) as store:
