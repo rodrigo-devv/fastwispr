@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fastwispr"
+version = "0.1.0"
+description = "Local-first Windows dictation with fast local speech-to-text and focused-app paste."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Rodrigo" }]
+dependencies = []
+
+[project.optional-dependencies]
+stt = ["faster-whisper>=1.0"]
+windows = ["keyboard>=0.13", "sounddevice>=0.4", "pyperclip>=1.8", "pyautogui>=0.9"]
+test = ["pytest>=8"]
+
+[project.scripts]
+fastwispr = "fastwispr.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
