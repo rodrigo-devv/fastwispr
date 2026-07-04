@@ -42,6 +42,12 @@ def test_windows_startup_scripts_install_and_remove_fastwispr_shortcut():
     assert "--windowed" in build_text
     assert "FastWisprCli.exe" in build_text
     assert "windows-smoke" in build_text
+    assert "--collect-data" in build_text
+    assert '"faster_whisper"' in build_text
+    assert "silero_vad_v6.onnx" in build_text
+    assert "Stop-Process -Force" in build_text
+    assert '"FastWispr", "FastWisprCli"' in build_text
+    assert "Remove-Item -Recurse -Force $BuildDir" in build_text
     assert '"--hidden-import", "keyboard"' in build_text
     assert '"--hidden-import", "sounddevice"' in build_text
     assert "Invoke-External" in setup_text

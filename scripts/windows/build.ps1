@@ -22,6 +22,10 @@ function Invoke-PyInstallerBuild {
         [switch]$Windowed
     )
 
+    $CollectDataArgs = @(
+        "--collect-data", "faster_whisper"
+    )
+
     $HiddenImportArgs = @(
         "--hidden-import", "fastwispr.windows.tray",
         "--hidden-import", "fastwispr.windows.settings_ui",
@@ -49,6 +53,7 @@ function Invoke-PyInstallerBuild {
     if ($Windowed) {
         $Args += "--windowed"
     }
+    $Args += $CollectDataArgs
     $Args += $HiddenImportArgs
     $Args += (Join-Path $RepoRoot "src\fastwispr\__main__.py")
 
@@ -58,6 +63,13 @@ function Invoke-PyInstallerBuild {
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RepoRoot = Split-Path -Parent (Split-Path -Parent $ScriptDir)
 Set-Location $RepoRoot
+
+Get-Process "FastWispr", "FastWisprCli" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Start-Sleep -Milliseconds 500
+$BuildDir = Join-Path $RepoRoot "build"
+Remove-Item -Recurse -Force $BuildDir -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force (Join-Path $RepoRoot "dist\FastWispr") -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force (Join-Path $RepoRoot "dist\FastWisprCli") -ErrorAction SilentlyContinue
 
 $Python = Join-Path $RepoRoot ".venv\Scripts\python.exe"
 if (!(Test-Path $Python)) {
@@ -81,6 +93,16 @@ if (!(Test-Path $CliExe)) {
     throw "PyInstaller did not produce $CliExe"
 }
 
+$SileroVadRelativePath = "_internal\faster_whisper\assets\silero_vad_v6.onnx"
+$AppSileroVad = Join-Path (Split-Path -Parent $AppExe) $SileroVadRelativePath
+$CliSileroVad = Join-Path (Split-Path -Parent $CliExe) $SileroVadRelativePath
+if (!(Test-Path $AppSileroVad)) {
+    throw "Missing packaged faster-whisper VAD asset: $AppSileroVad"
+}
+if (!(Test-Path $CliSileroVad)) {
+    throw "Missing packaged faster-whisper VAD asset: $CliSileroVad"
+}
+
 Invoke-External "Verifying packaged CLI executable." { & $CliExe windows-smoke }
 
 Write-Host "Verifying packaged windowed app executable." -ForegroundColor Yellow
@@ -88,6 +110,11 @@ $AppSmoke = Start-Process -FilePath $AppExe -ArgumentList "windows-smoke" -Wait 
 if ($AppSmoke.ExitCode -ne 0) {
     throw "Verifying packaged windowed app executable failed with exit code $($AppSmoke.ExitCode)"
 }
+
+$BuildDir = Join-Path $RepoRoot "build"
+Remove-Item -Recurse -Force $BuildDir -ErrorAction SilentlyContinue
+Remove-Item -Force (Join-Path $RepoRoot "FastWispr.spec") -ErrorAction SilentlyContinue
+Remove-Item -Force (Join-Path $RepoRoot "FastWisprCli.spec") -ErrorAction SilentlyContinue
 
 Write-Host "Built app: $AppExe" -ForegroundColor Green
 Write-Host "Built CLI: $CliExe" -ForegroundColor Green

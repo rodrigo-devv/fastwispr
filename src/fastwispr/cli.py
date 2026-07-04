@@ -89,9 +89,17 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def normalize_argv_for_packaged_app(argv: list[str], *, frozen: bool | None = None) -> list[str]:
+def normalize_argv_for_packaged_app(
+    argv: list[str],
+    *,
+    frozen: bool | None = None,
+    executable_path: str | Path | None = None,
+) -> list[str]:
     is_frozen = bool(getattr(sys, "frozen", False)) if frozen is None else frozen
     if is_frozen and not argv:
+        exe_path = Path(executable_path or sys.executable)
+        if exe_path.stem.lower().endswith("cli"):
+            return []
         return ["run-windows-tray"]
     return list(argv)
 

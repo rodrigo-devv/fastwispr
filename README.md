@@ -247,6 +247,8 @@ Double-clicking `FastWispr.exe` starts the tray app by default. Use `FastWisprCl
 .\dist\FastWisprCli\FastWisprCli.exe history --limit 10
 ```
 
+Do not launch anything from `build\`; that directory is PyInstaller scratch space. The build script removes it after a successful build so the only user-facing executables live under `dist\`. The packaged bundles also include `faster_whisper\assets\silero_vad_v6.onnx`, required by the Silero VAD path during transcription.
+
 ## Logs
 
 FastWispr writes app logs to:
@@ -272,7 +274,7 @@ python -m pytest -q
 Expected on the current version:
 
 ```text
-81 passed
+82 passed
 ```
 
 Windows smoke:
