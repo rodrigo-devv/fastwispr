@@ -16,6 +16,16 @@ from .config import Config, load_config, resolve_config_path
 from .db import DictationEvent, Store, init_db
 from .logging_setup import configure_file_logging
 from .pipeline import process_text_with_store
+from .single_instance import (
+    APP_ALREADY_RUNNING_MESSAGE,
+    APP_MUTEX_NAME,
+    ENGINE_ALREADY_RUNNING_MESSAGE,
+    ENGINE_MUTEX_NAME,
+    AlreadyRunningError,
+    SingleInstanceGuard,
+    show_already_running_message,
+    single_instance_smoke,
+)
 from .stt import make_stt
 
 
@@ -211,17 +221,40 @@ def main(argv: list[str] | None = None) -> int:
         return windows_smoke()
 
     if args.command == "run-windows-app":
-        run_windows_app(config)
-        return 0
+        return run_with_single_instance(
+            ENGINE_MUTEX_NAME,
+            ENGINE_ALREADY_RUNNING_MESSAGE,
+            lambda: run_windows_app(config),
+        )
 
     if args.command == "run-windows-tray":
         from .windows.tray import run_tray
 
-        run_tray(resolve_config_path(args.config), autostart=not args.no_autostart)
-        return 0
+        return run_with_single_instance(
+            APP_MUTEX_NAME,
+            APP_ALREADY_RUNNING_MESSAGE,
+            lambda: run_tray(resolve_config_path(args.config), autostart=not args.no_autostart),
+        )
 
     parser.print_help()
     return 2
+
+
+def run_with_single_instance(
+    mutex_name: str,
+    already_running_message: str,
+    action,
+    *,
+    guard_factory=SingleInstanceGuard,
+    notifier=show_already_running_message,
+) -> int:
+    try:
+        with guard_factory(mutex_name):
+            action()
+    except AlreadyRunningError:
+        logging.getLogger("fastwispr.cli").info("single instance already running mutex=%s", mutex_name)
+        notifier(already_running_message)
+    return 0
 
 
 def windows_smoke() -> int:
@@ -231,6 +264,7 @@ def windows_smoke() -> int:
         ("paste", "fastwispr.windows.injector", "ClipboardPasteInjector", lambda attr: attr()),
         ("tray", "fastwispr.windows.tray", "FastWisprTrayController", lambda attr: attr()),
         ("settings", "fastwispr.windows.settings_ui", "settings_values_from_config", lambda attr: attr),
+        ("single-instance", "fastwispr.single_instance", "single_instance_smoke", lambda attr: attr()),
     ]
     failed = False
     for name, module_name, attr_name, smoke in checks:

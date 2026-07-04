@@ -249,6 +249,8 @@ Double-clicking `FastWispr.exe` starts the tray app by default. Use `FastWisprCl
 
 Do not launch anything from `build\`; that directory is PyInstaller scratch space. The build script removes it after a successful build so the only user-facing executables live under `dist\`. The packaged bundles also include `faster_whisper\assets\silero_vad_v6.onnx`, required by the Silero VAD path during transcription.
 
+FastWispr enforces one app/tray instance with Windows named mutexes. Opening `FastWispr.exe` again shows a "FastWispr já está aberto" message and exits instead of registering duplicate hotkeys.
+
 ## Logs
 
 FastWispr writes app logs to:
@@ -274,7 +276,7 @@ python -m pytest -q
 Expected on the current version:
 
 ```text
-82 passed
+89 passed
 ```
 
 Windows smoke:
@@ -291,6 +293,7 @@ audio: ok
 paste: ok
 tray: ok
 settings: ok
+single-instance: ok
 ```
 
 ## Roadmap
