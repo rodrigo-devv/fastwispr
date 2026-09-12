@@ -5,11 +5,17 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "fastwispr"
 version = "0.1.0"
-description = "Local-first Windows dictation with fast local speech-to-text and focused-app paste."
+description = "Open-source local-first Windows dictation (Wispr Flow alternative). Hotkey, on-device Whisper, paste into any app."
 readme = "README.md"
+license = { file = "LICENSE" }
 requires-python = ">=3.11"
-authors = [{ name = "Rodrigo" }]
+authors = [{ name = "Rodrigo Oliveira", email = "devv.rodrigo@gmail.com" }]
+keywords = ["dictation", "whisper", "speech-to-text", "windows", "local-first", "privacy", "wispr-flow"]
 dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/rodrigo-devv/fastwispr"
+Repository = "https://github.com/rodrigo-devv/fastwispr"
 
 [project.optional-dependencies]
 stt = ["faster-whisper>=1.0"]
