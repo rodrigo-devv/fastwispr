@@ -270,12 +270,12 @@ QPushButton#FooterGhost {{
   background: {tokens['surface']};
   color: {tokens['text']};
   border: 1px solid {tokens['border']};
-  border-radius: 12px;
+  border-radius: 5px;
   font-size: 13px;
   font-weight: 500;
   min-height: {FOOTER_H}px;
   max-height: {FOOTER_H}px;
-  padding: 0 14px;
+  padding: 0 12px;
 }}
 QPushButton#FooterGhost:hover {{
   background: {tokens['surface_hover']};
@@ -284,15 +284,29 @@ QPushButton#FooterPrimary {{
   background: {tokens['accent']};
   color: #FFFFFF;
   border: 1px solid {tokens['accent']};
-  border-radius: 12px;
+  border-radius: 5px;
   font-size: 13px;
   font-weight: 600;
   min-height: {FOOTER_H}px;
   max-height: {FOOTER_H}px;
-  padding: 0 14px;
+  padding: 0 12px;
 }}
 QPushButton#FooterPrimary:hover {{
   background: {tokens['accent_hover']};
+}}
+QPushButton#FooterOutline {{
+  background: {tokens['surface']};
+  color: {tokens['text']};
+  border: 1px solid {tokens['accent']};
+  border-radius: 5px;
+  font-size: 13px;
+  font-weight: 500;
+  min-height: {FOOTER_H}px;
+  max-height: {FOOTER_H}px;
+  padding: 0 12px;
+}}
+QPushButton#FooterOutline:hover {{
+  background: {tokens['accent_soft']};
 }}
 QPushButton#Ghost {{
   background: transparent;

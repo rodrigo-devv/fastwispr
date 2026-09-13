@@ -91,12 +91,13 @@ def _stroke(painter, name: str) -> None:
         painter.drawLine(5, 12, 10, 17)
         painter.drawLine(10, 17, 19, 7)
     elif name == "settings":
-        painter.drawEllipse(9, 9, 6, 6)
+        painter.drawEllipse(7.5, 7.5, 9, 9)
+        painter.drawEllipse(10.25, 10.25, 3.5, 3.5)
         for angle in range(0, 360, 60):
             painter.save()
             painter.translate(12, 12)
             painter.rotate(angle)
-            painter.drawRoundedRect(-2.1, -11.2, 4.2, 5.2, 1.1, 1.1)
+            painter.drawRect(-1.05, -11, 2.1, 3.4)
             painter.restore()
     elif name == "book":
         painter.drawRoundedRect(4, 3, 16, 18, 2, 2)

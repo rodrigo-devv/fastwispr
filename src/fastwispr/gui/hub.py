@@ -178,7 +178,8 @@ class PageBar(QWidget):
         self.setFixedHeight(PAGEBAR_H)
         palette = tokens or theme_tokens("dark")
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(12, 0, 12, 0)
+        layout.setContentsMargins(12, 6, 12, 6)
+        layout.setAlignment(Qt.AlignVCenter)
         back = QPushButton()
         back.setObjectName("IconBtn")
         back.setFixedSize(32, 32)
@@ -732,6 +733,71 @@ class CloseDialog(QDialog):
     def _quit(self) -> None:
         self.choice = self.QUIT
         self.accept()
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        del event
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        path = QPainterPath()
+        path.addRoundedRect(rect, 9, 9)
+        painter.fillPath(path, QColor(self._tokens["bg"]))
+        painter.setPen(QPen(QColor(self._tokens["border"]), 1))
+        painter.drawPath(path)
+        painter.end()
+
+
+class HubDialog(QDialog):
+    """Frameless hub chrome. No Windows caption bar."""
+
+    def __init__(self, title: str, tokens: dict[str, str], parent=None, *, width: int = 320, height: int = 240):
+        super().__init__(parent)
+        self._tokens = tokens
+        self._drag: QPoint | None = None
+        self.setModal(True)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.setFixedSize(width, height)
+        self.setStyleSheet(app_qss(tokens))
+        root = QVBoxLayout(self)
+        root.setContentsMargins(1, 1, 1, 1)
+        root.setSpacing(0)
+        chrome = QWidget()
+        chrome.setFixedHeight(44)
+        bar = QHBoxLayout(chrome)
+        bar.setContentsMargins(16, 0, 4, 0)
+        bar.setSpacing(0)
+        lbl = QLabel(title)
+        lbl.setStyleSheet("font-size:14px; font-weight:600;")
+        close = QPushButton()
+        close.setObjectName("CaptionClose")
+        close.setFixedSize(40, 44)
+        close.setFocusPolicy(Qt.NoFocus)
+        close.setIcon(QIcon(icon_pixmap("x", tokens["text_secondary"], canvas=40)))
+        close.setIconSize(QSize(ICON_PX, ICON_PX))
+        close.clicked.connect(self.reject)
+        bar.addWidget(lbl)
+        bar.addStretch(1)
+        bar.addWidget(close)
+        root.addWidget(chrome)
+        self.body = QVBoxLayout()
+        self.body.setContentsMargins(16, 8, 16, 16)
+        self.body.setSpacing(10)
+        root.addLayout(self.body, 1)
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802
+        if event.button() == Qt.LeftButton and event.position().y() <= 44:
+            self._drag = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event) -> None:  # noqa: N802
+        if self._drag is not None and event.buttons() & Qt.LeftButton:
+            self.move(event.globalPosition().toPoint() - self._drag)
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event) -> None:  # noqa: N802
+        self._drag = None
+        super().mouseReleaseEvent(event)
 
     def paintEvent(self, event) -> None:  # noqa: N802
         del event
@@ -1368,19 +1434,25 @@ class AppShell(QWidget):
         refresh()
 
     def _add_dictionary(self) -> None:
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Add word")
-        box = QVBoxLayout(dialog)
+        dialog = HubDialog("Add word", self._tokens, self, width=320, height=220)
         spoken = QLineEdit()
         spoken.setPlaceholderText("Spoken")
         written = QLineEdit()
         written.setPlaceholderText("Written")
-        box.addWidget(spoken)
-        box.addWidget(written)
-        buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
-        box.addWidget(buttons)
-        buttons.accepted.connect(dialog.accept)
-        buttons.rejected.connect(dialog.reject)
+        save = QPushButton("Save")
+        save.setObjectName("Primary")
+        cancel = QPushButton("Cancel")
+        cancel.setObjectName("Ghost")
+        row = QHBoxLayout()
+        row.addWidget(cancel)
+        row.addStretch(1)
+        row.addWidget(save)
+        dialog.body.addWidget(spoken)
+        dialog.body.addWidget(written)
+        dialog.body.addStretch(1)
+        dialog.body.addLayout(row)
+        cancel.clicked.connect(dialog.reject)
+        save.clicked.connect(dialog.accept)
         if dialog.exec() == QDialog.Accepted and spoken.text().strip():
             self.store.upsert_dictionary(spoken.text(), written.text() or spoken.text())
             self.show_page("dictionary")
@@ -1428,18 +1500,23 @@ class AppShell(QWidget):
         self._edit_snippet("", "")
 
     def _edit_snippet(self, cue: str, body: str) -> None:
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Snippet")
-        box = QVBoxLayout(dialog)
+        dialog = HubDialog("Snippet" if cue else "Add snippet", self._tokens, self, width=320, height=280)
         trigger = QLineEdit(cue)
         trigger.setPlaceholderText("Trigger phrase")
         editor = QPlainTextEdit(body)
-        box.addWidget(trigger)
-        box.addWidget(editor)
-        buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
-        box.addWidget(buttons)
-        buttons.accepted.connect(dialog.accept)
-        buttons.rejected.connect(dialog.reject)
+        save = QPushButton("Save")
+        save.setObjectName("Primary")
+        cancel = QPushButton("Cancel")
+        cancel.setObjectName("Ghost")
+        row = QHBoxLayout()
+        row.addWidget(cancel)
+        row.addStretch(1)
+        row.addWidget(save)
+        dialog.body.addWidget(trigger)
+        dialog.body.addWidget(editor, 1)
+        dialog.body.addLayout(row)
+        cancel.clicked.connect(dialog.reject)
+        save.clicked.connect(dialog.accept)
         if dialog.exec() == QDialog.Accepted and trigger.text().strip():
             if cue and cue != trigger.text().strip():
                 self.store.delete_snippet(cue)
@@ -1511,10 +1588,10 @@ class AppShell(QWidget):
         footer.setAttribute(Qt.WA_StyledBackground, True)
         footer.setStyleSheet(f"background-color: {self._tokens['bg']};")
         foot = QHBoxLayout(footer)
-        foot.setContentsMargins(0, 12, 0, 12)
+        foot.setContentsMargins(0, 16, 0, 0)
         foot.setSpacing(8)
-        foot.addWidget(self._footer_button("Dictionary", "book", lambda: self.show_page("dictionary"), primary=False), 1)
-        foot.addWidget(self._footer_button("Snippets", "quote", lambda: self.show_page("snippets"), primary=True), 1)
+        foot.addWidget(self._footer_button("Dictionary", "book", lambda: self.show_page("dictionary"), outline=True), 1)
+        foot.addWidget(self._footer_button("Snippets", "quote", lambda: self.show_page("snippets"), outline=True), 1)
         layout.addWidget(footer)
 
     def _section_header(self, title: str) -> QWidget:
@@ -1568,12 +1645,20 @@ class AppShell(QWidget):
         btn.clicked.connect(lambda: self.show_page("about"))
         return btn
 
-    def _footer_button(self, label: str, icon: str, on_click, *, primary: bool) -> QPushButton:
+    def _footer_button(self, label: str, icon: str, on_click, *, primary: bool = False, outline: bool = False) -> QPushButton:
         btn = QPushButton(f" {label}")
-        btn.setObjectName("FooterPrimary" if primary else "FooterGhost")
+        if outline:
+            name = "FooterOutline"
+            color = self._tokens["accent"]
+        elif primary:
+            name = "FooterPrimary"
+            color = "#FFFFFF"
+        else:
+            name = "FooterGhost"
+            color = self._tokens["text"]
+        btn.setObjectName(name)
         btn.setFixedHeight(FOOTER_H)
-        color = "#FFFFFF" if primary else self._tokens["text"]
-        btn.setIcon(QIcon(icon_pixmap(icon, color, canvas=FOOTER_H)))
+        btn.setIcon(QIcon(icon_pixmap(icon, color, canvas=ICON_PX)))
         btn.setIconSize(QSize(ICON_PX, ICON_PX))
         btn.setFocusPolicy(Qt.NoFocus)
         btn.clicked.connect(on_click)
