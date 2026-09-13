@@ -228,6 +228,21 @@ class StatusDot(QWidget):
         painter.end()
 
 
+class Hairline(QWidget):
+    def __init__(self, color: str, parent=None):
+        super().__init__(parent)
+        self._color = QColor(color)
+        self.setFixedHeight(1)
+        self.setMinimumWidth(24)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        del event
+        painter = QPainter(self)
+        painter.fillRect(self.rect(), self._color)
+        painter.end()
+
+
 class Toggle(QWidget):
     changed = Signal(bool)
 
@@ -658,21 +673,20 @@ class AppShell(QWidget):
         self.setMask(QRegion(path.toFillPolygon().toPolygon()))
         super().resizeEvent(event)
 
-    def _section_line(self) -> QFrame:
-        line = QFrame()
-        line.setObjectName("SectionDivider")
-        line.setFrameShape(QFrame.NoFrame)
-        line.setFixedHeight(1)
-        line.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        return line
+    def _section_line(self) -> QWidget:
+        return Hairline(self._tokens["border"])
 
-    def _style_scroll(self, scroll: QScrollArea, inner: QWidget) -> None:
+    def _style_scroll(self, scroll: QScrollArea, inner: QWidget, *, bars: bool = True) -> None:
         bg = self._tokens["bg"]
         inner.setAutoFillBackground(True)
         inner.setStyleSheet(f"background: {bg};")
         scroll.setStyleSheet(f"background: {bg}; border: none;")
+        scroll.setFrameShape(QFrame.NoFrame)
         scroll.viewport().setAutoFillBackground(True)
         scroll.viewport().setStyleSheet(f"background: {bg};")
+        if not bars:
+            scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
     def _clear(self, name: str) -> QVBoxLayout:
         widget = self.pages[name]
@@ -1028,10 +1042,15 @@ class AppShell(QWidget):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setWidget(scroll_wrap)
-        self._style_scroll(scroll, scroll_wrap)
+        self._style_scroll(scroll, scroll_wrap, bars=False)
         layout.addWidget(scroll, 1)
-        layout.addWidget(self._section_line())
-        layout.addWidget(self._about_button())
+        footer = QWidget()
+        footer.setAttribute(Qt.WA_StyledBackground, True)
+        footer.setStyleSheet(f"background-color: {self._tokens['bg']};")
+        foot = QVBoxLayout(footer)
+        foot.setContentsMargins(0, 12, 0, 12)
+        foot.addWidget(self._about_button())
+        layout.addWidget(footer)
 
     def _section_header(self, title: str) -> QWidget:
         wrap = QWidget()
