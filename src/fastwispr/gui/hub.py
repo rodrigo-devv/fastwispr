@@ -566,6 +566,7 @@ class DragValue(QWidget):
         self._fmt = fmt
         self.setFixedHeight(34)
         self.setMinimumWidth(168)
+        self._saved = value
         row = QHBoxLayout(self)
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(8)
@@ -583,15 +584,19 @@ class DragValue(QWidget):
         row.addWidget(self._slider, 1)
         row.addWidget(self._label)
         self._slider.valueChanged.connect(self._live)
-        self._slider.sliderReleased.connect(self._commit)
+
+    def is_dirty(self) -> bool:
+        return int(round(self._saved / self._step)) != self._slider.value()
+
+    def commit(self) -> float:
+        self._saved = self._value()
+        return self._saved
 
     def _value(self) -> float:
         return self._slider.value() * self._step
 
     def _live(self, _raw: int) -> None:
         self._label.setText(self._fmt.format(self._value()))
-
-    def _commit(self) -> None:
         self.changed.emit(self._value())
 
 
@@ -740,6 +745,73 @@ class CloseDialog(QDialog):
         painter.end()
 
 
+class DelayedTip(QWidget):
+    def __init__(self, tokens: dict[str, str]):
+        super().__init__(None)
+        self._host: QWidget | None = None
+        self.setWindowFlags(Qt.ToolTip | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        self.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self._label = QLabel()
+        self._label.setWordWrap(True)
+        self._label.setFixedWidth(220)
+        box = QVBoxLayout(self)
+        box.setContentsMargins(7, 5, 7, 5)
+        box.addWidget(self._label)
+        self._timer = QTimer(self)
+        self._timer.setSingleShot(True)
+        self._timer.setInterval(3000)
+        self._timer.timeout.connect(self._popup)
+        self.restyle(tokens)
+        self.hide()
+
+    def restyle(self, tokens: dict[str, str]) -> None:
+        self._tokens = tokens
+        self._label.setStyleSheet(f"color: {tokens['text']}; font-size: 11px; background: transparent;")
+        self.update()
+
+    def arm(self, host: QWidget, text: str) -> None:
+        if host is self._host and (self._timer.isActive() or self.isVisible()):
+            return
+        self.cancel()
+        self._host = host
+        self._label.setText(text)
+        self._timer.start()
+
+    def cancel(self) -> None:
+        self._timer.stop()
+        self._host = None
+        self.hide()
+
+    def _popup(self) -> None:
+        if self._host is None:
+            return
+        self.adjustSize()
+        pos = self._host.mapToGlobal(QPoint(0, -self.height() - 8))
+        screen = QGuiApplication.screenAt(QCursor.pos())
+        if screen is not None:
+            geo = screen.availableGeometry()
+            x = min(max(pos.x(), geo.left() + 8), geo.right() - self.width() - 8)
+            y = pos.y()
+            if y < geo.top() + 8:
+                y = self._host.mapToGlobal(QPoint(0, self._host.height() + 8)).y()
+            pos = QPoint(x, y)
+        self.move(pos)
+        self.show()
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        del event
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        path = QPainterPath()
+        path.addRoundedRect(rect, 4, 4)
+        painter.fillPath(path, QColor(self._tokens["surface"]))
+        painter.setPen(QPen(QColor(self._tokens["border"]), 1))
+        painter.drawPath(path)
+        painter.end()
+
+
 class AppShell(QWidget):
     transcript_ready = Signal()
     def __init__(
@@ -770,6 +842,7 @@ class AppShell(QWidget):
         self._quitting = False
         self.on_activation_mode: Callable[[str], None] | None = None
         self.on_hotkey: Callable[[str], None] | None = None
+        self._tip = DelayedTip(self._tokens)
         self.setObjectName("AppShell")
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Window)
@@ -802,11 +875,30 @@ class AppShell(QWidget):
         self.show_page("home")
 
     def eventFilter(self, watched, event) -> bool:  # noqa: N802
+        kind = event.type()
+        if kind in {QEvent.Type.Enter, QEvent.Type.HoverEnter}:
+            host = self._tip_host(watched)
+            if host is not None:
+                self._tip.arm(host, str(host.property("tip")))
+        elif kind in {QEvent.Type.Leave, QEvent.Type.HoverLeave}:
+            host = self._tip_host(watched)
+            dest = QApplication.widgetAt(QCursor.pos())
+            if host is not None and not (dest is not None and (host is dest or host.isAncestorOf(dest))):
+                self._tip.cancel()
         # Space must not activate the theme button (or any hub button).
-        if event.type() == QEvent.Type.KeyPress and event.key() == Qt.Key_Space:
+        if kind == QEvent.Type.KeyPress and event.key() == Qt.Key_Space:
             if isinstance(watched, QPushButton) and (watched is self or self.isAncestorOf(watched)):
                 return True
         return super().eventFilter(watched, event)
+
+    def _tip_host(self, widget) -> QWidget | None:
+        current = widget
+        while current is not None and current is not self:
+            tip = current.property("tip")
+            if isinstance(tip, str) and tip:
+                return current
+            current = current.parentWidget()
+        return None
 
     def note_transcript(self) -> None:
         if self._page in {"home", "history"}:
@@ -838,6 +930,7 @@ class AppShell(QWidget):
         tokens = theme_tokens(self.theme_preference, system_dark)
         self._tokens = tokens
         self.setStyleSheet(app_qss(tokens))
+        self._tip.restyle(tokens)
         pal = QPalette()
         pal.setColor(QPalette.ColorRole.Window, QColor(tokens["bg"]))
         pal.setColor(QPalette.ColorRole.Base, QColor(tokens["bg"]))
@@ -1341,12 +1434,14 @@ class AppShell(QWidget):
                 "stt.compute_type": self.config.stt_compute_type,
             }
         )
+        seconds = DragValue(self.config.min_record_seconds, 0.10, 2.00, 0.05, "{:.2f}")
+        rms = DragValue(self.config.min_audio_rms, 0.001, 0.020, 0.001, "{:.3f}")
         body.addWidget(
             self._settings_block(
                 "General",
                 [
-                    self._settings_row("Save to clipboard", trailing=self._clipboard_toggle()),
-                    self._settings_row("Push to talk", trailing=self._ptt_toggle()),
+                    self._settings_row("Save to clipboard", trailing=self._clipboard_toggle(), tip="Keep the last transcript on the clipboard after paste."),
+                    self._settings_row("Push to talk", trailing=self._ptt_toggle(), tip="Hold the hotkey to record. Release to stop. Off uses press-to-start, press-to-stop."),
                     self._settings_row(
                         "Theme",
                         trailing=self._segmented(
@@ -1354,6 +1449,7 @@ class AppShell(QWidget):
                             self.theme_preference.capitalize(),
                             lambda name: self.set_theme(name.lower()),
                         ),
+                        tip="Dark, light, or follow Windows. Does not change with Space.",
                     ),
                     self._hotkey_row(),
                 ],
@@ -1366,16 +1462,18 @@ class AppShell(QWidget):
                     self._settings_row(
                         "Preset",
                         trailing=self._segmented(["Fast", "Balanced", "Accurate"], current_preset or "Balanced", self._apply_preset),
+                        tip="Fast is whisper-base, Balanced is small, Accurate is medium. All run locally on CPU.",
                     ),
-                    self._settings_row("Model", trailing=Select([(model_chip_label(self.config.stt_model), model_chip_label(self.config.stt_model))], model_chip_label(self.config.stt_model), self._tokens)),
-                    self._settings_row("Language", trailing=self._language_select()),
-                    self._settings_row("Minimum seconds", trailing=self._drag("dictation.min_record_seconds", self.config.min_record_seconds, 0.10, 2.00, 0.05, "{:.2f}")),
-                    self._settings_row("Minimum RMS", trailing=self._drag("dictation.min_audio_rms", self.config.min_audio_rms, 0.001, 0.020, 0.001, "{:.3f}")),
+                    self._settings_row("Model", trailing=Select([(model_chip_label(self.config.stt_model), model_chip_label(self.config.stt_model))], model_chip_label(self.config.stt_model), self._tokens), tip="Whisper model chosen by the preset. First run may download it."),
+                    self._settings_row("Language", trailing=self._language_select(), tip="PT + EN transcribes Portuguese and English. It does not translate."),
+                    self._settings_row("Minimum seconds", trailing=seconds, tip="Recordings shorter than this are ignored."),
+                    self._settings_row("Minimum RMS", trailing=rms, tip="Audio quieter than this noise floor is ignored."),
+                    self._drag_save([("dictation.min_record_seconds", seconds), ("dictation.min_audio_rms", rms)]),
                 ],
             )
         )
-        body.addWidget(self._settings_block("Microphone", [self._settings_row("Input device", trailing=self._language_select([("default", "Default")]))]))
-        body.addWidget(self._settings_block("Cloud", [self._settings_row("Coming later", value="WIP")]))
+        body.addWidget(self._settings_block("Microphone", [self._settings_row("Input device", trailing=self._language_select([("default", "Default")]), tip="Microphone used for dictation.")]))
+        body.addWidget(self._settings_block("Cloud", [self._settings_row("Coming later", value="WIP", tip="Cloud dictation is not available yet.")]))
         body.addStretch(1)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -1411,10 +1509,13 @@ class AppShell(QWidget):
             col.addWidget(row)
         return box
 
-    def _settings_row(self, label: str, trailing: QWidget | None = None, value: str | None = None) -> QWidget:
+    def _settings_row(self, label: str, trailing: QWidget | None = None, value: str | None = None, tip: str | None = None) -> QWidget:
         wrap = QWidget()
         wrap.setObjectName("SettingsRow")
         wrap.setFixedHeight(ROW_H)
+        if tip:
+            wrap.setProperty("tip", tip)
+            wrap.setMouseTracking(True)
         row = QHBoxLayout(wrap)
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(8)
@@ -1473,7 +1574,36 @@ class AppShell(QWidget):
                 self.on_hotkey(hotkey)
 
         editor.saved.connect(persist)
+        editor.setProperty("tip", "Click the box, press a combo, then Save. ESC cancels.")
+        editor.setMouseTracking(True)
         return editor
+
+    def _drag_save(self, fields: list[tuple[str, DragValue]]) -> QWidget:
+        wrap = QWidget()
+        wrap.setFixedHeight(34)
+        row = QHBoxLayout(wrap)
+        row.setContentsMargins(0, 4, 0, 0)
+        row.addStretch(1)
+        save = QPushButton("Save")
+        save.setObjectName("SaveMini")
+        save.setFixedSize(56, 28)
+        save.setFocusPolicy(Qt.NoFocus)
+        save.setEnabled(False)
+
+        def refresh() -> None:
+            save.setEnabled(any(item.is_dirty() for _key, item in fields))
+
+        def persist() -> None:
+            for key, item in fields:
+                if item.is_dirty():
+                    self._save_field(key, f"{item.commit():g}")
+            refresh()
+
+        for _key, item in fields:
+            item.changed.connect(lambda *_args: refresh())
+        save.clicked.connect(persist)
+        row.addWidget(save)
+        return wrap
 
     def _segmented(self, names: list[str], current: str, on_pick) -> Segmented:
         control = Segmented(names, current, self._tokens)
@@ -1492,11 +1622,6 @@ class AppShell(QWidget):
             control.changed.connect(lambda code: self._save_field("stt.language", code))
             return control
         return Select(options, options[0][0], self._tokens)
-
-    def _drag(self, key: str, value: float, lo: float, hi: float, step: float, fmt: str) -> DragValue:
-        control = DragValue(value, lo, hi, step, fmt)
-        control.changed.connect(lambda amount, k=key: self._save_field(k, f"{amount:g}"))
-        return control
 
     def _field(self, key: str, value: str) -> QLineEdit:
         editor = QLineEdit(value)
