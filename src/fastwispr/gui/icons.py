@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-# Lucide-style 24x24 stroke icons. Painted at 15px inside 32px buttons. No emoji.
+# Lucide-style 24x24 stroke icons. Painted at 18px. No emoji.
 
+ICON_PX = 18
 ICON_NAMES = (
     "sun",
     "moon",
@@ -13,10 +14,12 @@ ICON_NAMES = (
     "clock",
     "search",
     "check",
+    "settings",
+    "mic",
 )
 
 
-def icon_pixmap(name: str, color: str, *, size: int = 15, canvas: int | None = None):
+def icon_pixmap(name: str, color: str, *, size: int = ICON_PX, canvas: int | None = None):
     """Stroke-draw a Lucide icon. Import Qt only when called."""
     from PySide6.QtCore import Qt
     from PySide6.QtGui import QColor, QPainter, QPen, QPixmap
@@ -30,7 +33,7 @@ def icon_pixmap(name: str, color: str, *, size: int = 15, canvas: int | None = N
     painter.setRenderHint(QPainter.Antialiasing)
     painter.translate((box - size) / 2, (box - size) / 2)
     painter.scale(size / 24.0, size / 24.0)
-    pen = QPen(QColor(color), 2)
+    pen = QPen(QColor(color), 2.4)
     pen.setCapStyle(Qt.RoundCap)
     pen.setJoinStyle(Qt.RoundJoin)
     painter.setPen(pen)
@@ -80,3 +83,16 @@ def _stroke(painter, name: str) -> None:
     elif name == "check":
         painter.drawLine(5, 12, 10, 17)
         painter.drawLine(10, 17, 19, 7)
+    elif name == "settings":
+        painter.drawEllipse(9, 9, 6, 6)
+        for angle in (0, 45, 90, 135, 180, 225, 270, 315):
+            painter.save()
+            painter.translate(12, 12)
+            painter.rotate(angle)
+            painter.drawLine(0, -10, 0, -7)
+            painter.restore()
+    elif name == "mic":
+        painter.drawRoundedRect(9, 3, 6, 11, 3, 3)
+        painter.drawArc(7, 11, 10, 9, 0, -180 * 16)
+        painter.drawLine(12, 20, 12, 22)
+        painter.drawLine(9, 22, 15, 22)

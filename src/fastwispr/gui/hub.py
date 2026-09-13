@@ -31,9 +31,9 @@ from .theme import (
 )
 
 try:
-    from PySide6.QtCore import QPoint, QSize, Qt, QTimer
-    from PySide6.QtGui import QColor, QCursor, QFont, QGuiApplication, QIcon, QPainter, QPixmap
-    from .icons import icon_pixmap
+    from PySide6.QtCore import QPoint, QRectF, QSize, Qt, QTimer
+    from PySide6.QtGui import QColor, QCursor, QFont, QGuiApplication, QIcon, QPainter, QPainterPath, QPen, QPixmap, QRegion
+    from .icons import ICON_PX, icon_pixmap
     from PySide6.QtWidgets import (
         QApplication,
         QButtonGroup,
@@ -44,6 +44,7 @@ try:
         QLabel,
         QLineEdit,
         QMenu,
+        QMessageBox,
         QPlainTextEdit,
         QPushButton,
         QRadioButton,
@@ -58,6 +59,21 @@ except ImportError as exc:  # pragma: no cover - optional extra
 
 
 PAGES = ("home", "history", "detail", "dictionary", "snippets", "settings", "speech", "privacy", "appearance", "about", "dictation", "shortcuts", "microphone", "general")
+
+
+def _wipe_layout(layout) -> None:
+    """Recursively remove nested widgets. takeAt(widget-only) left duplicates on Home."""
+    if layout is None:
+        return
+    while layout.count():
+        item = layout.takeAt(0)
+        child = item.widget()
+        nested = item.layout()
+        if child is not None:
+            child.setParent(None)
+            child.deleteLater()
+        if nested is not None:
+            _wipe_layout(nested)
 
 
 def tray_icon_pixmap() -> QPixmap:
@@ -121,12 +137,12 @@ class TitleBar(QWidget):
     def recolor(self, tokens: dict[str, str], resolved_theme: str) -> None:
         # Dark UI shows a sun (switch to light); light UI shows a moon.
         theme_icon = "sun" if resolved_theme == "dark" else "moon"
-        self.theme_btn.setIcon(QIcon(icon_pixmap(theme_icon, tokens["text_secondary"], size=15, canvas=32)))
-        self.theme_btn.setIconSize(QSize(15, 15))
-        self.minimize_btn.setIcon(QIcon(icon_pixmap("minus", tokens["text_secondary"], size=15, canvas=40)))
-        self.minimize_btn.setIconSize(QSize(15, 15))
-        self.close_btn.setIcon(QIcon(icon_pixmap("x", tokens["accent"], size=15, canvas=40)))
-        self.close_btn.setIconSize(QSize(15, 15))
+        self.theme_btn.setIcon(QIcon(icon_pixmap(theme_icon, tokens["text_secondary"], size=ICON_PX, canvas=32)))
+        self.theme_btn.setIconSize(QSize(ICON_PX, ICON_PX))
+        self.minimize_btn.setIcon(QIcon(icon_pixmap("minus", tokens["text_secondary"], size=ICON_PX, canvas=40)))
+        self.minimize_btn.setIconSize(QSize(ICON_PX, ICON_PX))
+        self.close_btn.setIcon(QIcon(icon_pixmap("x", tokens["accent"], size=ICON_PX, canvas=40)))
+        self.close_btn.setIconSize(QSize(ICON_PX, ICON_PX))
 
     def mousePressEvent(self, event) -> None:  # noqa: N802
         if event.button() == Qt.LeftButton:
@@ -158,8 +174,8 @@ class PageBar(QWidget):
         back.setObjectName("IconBtn")
         back.setFixedSize(32, 32)
         back.setToolTip("Back")
-        back.setIcon(QIcon(icon_pixmap("chevron-left", palette["text_secondary"], size=15, canvas=32)))
-        back.setIconSize(QSize(15, 15))
+        back.setIcon(QIcon(icon_pixmap("chevron-left", palette["text_secondary"], size=ICON_PX, canvas=32)))
+        back.setIconSize(QSize(ICON_PX, ICON_PX))
         back.clicked.connect(on_back)
         title_lbl = QLabel(title)
         title_lbl.setStyleSheet("font-size:14px; font-weight:600;")
@@ -223,8 +239,8 @@ class TranscriptRow(QFrame):
         copy_btn.setObjectName("CopyBtn")
         copy_btn.setFixedSize(COPY_BTN, COPY_BTN)
         copy_btn.setToolTip("Copy")
-        copy_btn.setIcon(QIcon(icon_pixmap("copy", palette["text_secondary"], size=15, canvas=28)))
-        copy_btn.setIconSize(QSize(15, 15))
+        copy_btn.setIcon(QIcon(icon_pixmap("copy", palette["text_secondary"], size=ICON_PX, canvas=28)))
+        copy_btn.setIconSize(QSize(ICON_PX, ICON_PX))
         copy_btn.clicked.connect(lambda: on_copy(event.final_text))
         layout.addWidget(copy_btn, 0, Qt.AlignTop)
         self.mousePressEvent = lambda ev: on_open(event) if ev.button() == Qt.LeftButton else None  # type: ignore[method-assign]
@@ -293,18 +309,24 @@ class AppShell(QWidget):
         self.status = "Ready"
         self._detail: DictationEvent | None = None
         self.setObjectName("AppShell")
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Window)
         self.setMinimumSize(*HUB_MIN)
         self.setMaximumSize(*HUB_MAX)
         self.resize(*HUB_DEFAULT)
         root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
+        root.setContentsMargins(1, 1, 1, 1)
         root.setSpacing(0)
-        self.titlebar = TitleBar(self._cycle_theme, self.showMinimized, self.hide)
+        self.titlebar = TitleBar(self._cycle_theme, self.showMinimized, self.confirm_close)
         root.addWidget(self.titlebar)
+        self.header_line = QFrame()
+        self.header_line.setObjectName("SectionDivider")
+        self.header_line.setFixedHeight(1)
+        root.addWidget(self.header_line)
         self.page_bar_host = QWidget()
         self.page_bar_layout = QVBoxLayout(self.page_bar_host)
         self.page_bar_layout.setContentsMargins(0, 0, 0, 0)
+        self.page_bar_layout.setSpacing(0)
         root.addWidget(self.page_bar_host)
         self.stack = QStackedWidget()
         root.addWidget(self.stack, 1)
@@ -372,20 +394,9 @@ class AppShell(QWidget):
             "general": lambda: self._build_simple("general", [("activation.trigger", "Trigger"), ("activation.mode", "Mode")]),
         }
         widget = self.pages[name]
-        layout = widget.layout()
-        if layout is not None:
-            while layout.count():
-                item = layout.takeAt(0)
-                child = item.widget()
-                if child is not None:
-                    child.deleteLater()
-            QWidget().setLayout(layout)
+        _wipe_layout(widget.layout())
         builders[name]()
-        while self.page_bar_layout.count():
-            item = self.page_bar_layout.takeAt(0)
-            child = item.widget()
-            if child is not None:
-                child.deleteLater()
+        _wipe_layout(self.page_bar_layout)
         if name != "home":
             titles = {
                 "history": "History",
@@ -460,11 +471,58 @@ class AppShell(QWidget):
         self.paste_card.move(geo.right() - 240, geo.bottom() - 140)
         self.paste_card.show()
 
+    def confirm_close(self) -> None:
+        box = QMessageBox(self)
+        box.setWindowTitle("FastWISPR")
+        box.setText("Close FastWISPR?")
+        box.setInformativeText("Minimize keeps dictation on the taskbar. Quit stops the app.")
+        minimize = box.addButton("Minimize to taskbar", QMessageBox.ButtonRole.AcceptRole)
+        quit_btn = box.addButton("Quit", QMessageBox.ButtonRole.DestructiveRole)
+        box.addButton("Cancel", QMessageBox.ButtonRole.RejectRole)
+        box.exec()
+        clicked = box.clickedButton()
+        if clicked is minimize:
+            self.showMinimized()
+        elif clicked is quit_btn:
+            QApplication.quit()
+
+    def closeEvent(self, event) -> None:  # noqa: N802
+        event.ignore()
+        self.confirm_close()
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        del event
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        path = QPainterPath()
+        path.addRoundedRect(rect, 9, 9)
+        painter.fillPath(path, QColor(self._tokens["bg"]))
+        painter.setPen(QPen(QColor(self._tokens["border"]), 1))
+        painter.drawPath(path)
+        painter.end()
+
+    def resizeEvent(self, event) -> None:  # noqa: N802
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(self.rect()), 9, 9)
+        self.setMask(QRegion(path.toFillPolygon().toPolygon()))
+        super().resizeEvent(event)
+
+    def _section_line(self) -> QFrame:
+        line = QFrame()
+        line.setObjectName("SectionDivider")
+        line.setFixedHeight(1)
+        return line
+
     def _clear(self, name: str) -> QVBoxLayout:
         widget = self.pages[name]
-        layout = QVBoxLayout(widget)
-        layout.setContentsMargins(16, 8, 16, 16)
-        layout.setSpacing(12)
+        layout = widget.layout()
+        if layout is None:
+            layout = QVBoxLayout(widget)
+            layout.setContentsMargins(16, 12, 16, 16)
+            layout.setSpacing(12)
+        else:
+            _wipe_layout(layout)
         return layout
 
     def _build_home(self) -> None:
@@ -493,12 +551,21 @@ class AppShell(QWidget):
         hint.addStretch(1)
         layout.addLayout(hint)
         chips = QHBoxLayout()
-        chips.addWidget(self._chip(model_chip_label(self.config.stt_model), lambda: self.show_page("speech")), 1)
-        chips.addWidget(self._chip("Default", lambda: self.show_page("microphone")), 1)
+        chips.setSpacing(8)
+        chips.addWidget(self._chip("Model", model_chip_label(self.config.stt_model), lambda: self.show_page("speech")), 1)
+        chips.addWidget(self._chip("Microphone", "Default", lambda: self.show_page("microphone")), 1)
         layout.addLayout(chips)
+        layout.addWidget(self._section_line())
+        recent_head = QHBoxLayout()
         recent_lbl = QLabel("Recent")
         recent_lbl.setStyleSheet("font-size:14px; font-weight:600;")
-        layout.addWidget(recent_lbl)
+        view_all = QPushButton("View all")
+        view_all.setObjectName("Ghost")
+        view_all.clicked.connect(lambda: self.show_page("history"))
+        recent_head.addWidget(recent_lbl)
+        recent_head.addStretch(1)
+        recent_head.addWidget(view_all)
+        layout.addLayout(recent_head)
         events = self.store.recent_dictation_events(limit=3, transcripts_only=True)
         if not events:
             empty = QLabel("No transcriptions yet")
@@ -507,27 +574,43 @@ class AppShell(QWidget):
         for event in events:
             layout.addWidget(TranscriptRow(event, self.copy_text, lambda ev: self.show_page("detail", ev), tokens=self._tokens))
         layout.addStretch(1)
+        layout.addWidget(self._section_line())
         footer = QHBoxLayout()
-        history = QPushButton("History")
+        history = QPushButton(" History")
         history.setFixedHeight(FOOTER_H)
+        history.setIcon(QIcon(icon_pixmap("clock", self._tokens["text_secondary"], canvas=FOOTER_H)))
+        history.setIconSize(QSize(ICON_PX, ICON_PX))
         history.clicked.connect(lambda: self.show_page("history"))
-        settings = QPushButton("Settings")
+        settings = QPushButton(" Settings")
         settings.setObjectName("Primary")
         settings.setFixedHeight(FOOTER_H)
+        settings.setIcon(QIcon(icon_pixmap("settings", "#FFFFFF", canvas=FOOTER_H)))
+        settings.setIconSize(QSize(ICON_PX, ICON_PX))
         settings.clicked.connect(lambda: self.show_page("settings"))
         footer.addWidget(history)
         footer.addWidget(settings)
         layout.addLayout(footer)
 
-    def _chip(self, text: str, on_click) -> QPushButton:
-        btn = QPushButton(text)
-        btn.setObjectName("Chip")
-        btn.setFixedHeight(CHIP_H)
-        btn.setIcon(QIcon(icon_pixmap("chevron-right", self._tokens["text_muted"], size=15, canvas=16)))
-        btn.setIconSize(QSize(15, 15))
-        btn.setLayoutDirection(Qt.RightToLeft)
-        btn.clicked.connect(on_click)
-        return btn
+    def _chip(self, caption: str, value: str, on_click) -> QFrame:
+        frame = QFrame()
+        frame.setObjectName("Chip")
+        frame.setFixedHeight(CHIP_H)
+        frame.setCursor(Qt.PointingHandCursor)
+        row = QHBoxLayout(frame)
+        row.setContentsMargins(12, 6, 10, 6)
+        col = QVBoxLayout()
+        col.setSpacing(0)
+        cap = QLabel(caption)
+        cap.setObjectName("Meta")
+        val = QLabel(value)
+        col.addWidget(cap)
+        col.addWidget(val)
+        row.addLayout(col, 1)
+        chev = QLabel()
+        chev.setPixmap(icon_pixmap("chevron-right", self._tokens["text_muted"], canvas=ICON_PX))
+        row.addWidget(chev)
+        frame.mousePressEvent = lambda ev, cb=on_click: cb() if ev.button() == Qt.LeftButton else None  # type: ignore[method-assign]
+        return frame
 
     def _build_history(self) -> None:
         layout = self._clear("history")
@@ -738,8 +821,8 @@ class AppShell(QWidget):
         ]
         for label, page in rows:
             btn = QPushButton(label)
-            btn.setIcon(QIcon(icon_pixmap("chevron-right", self._tokens["text_muted"], size=15, canvas=16)))
-            btn.setIconSize(QSize(15, 15))
+            btn.setIcon(QIcon(icon_pixmap("chevron-right", self._tokens["text_muted"], canvas=ICON_PX)))
+            btn.setIconSize(QSize(ICON_PX, ICON_PX))
             btn.setLayoutDirection(Qt.RightToLeft)
             btn.setFixedHeight(46)
             btn.clicked.connect(lambda _=False, p=page: self.show_page(p))

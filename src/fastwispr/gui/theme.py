@@ -139,11 +139,16 @@ def preset_label(stt_model: str) -> str:
 def app_qss(tokens: dict[str, str]) -> str:
     return f"""
 QWidget#AppShell {{
-  background: {tokens['bg']};
+  background: transparent;
   color: {tokens['text']};
-  border: 1px solid {tokens['border']};
-  border-radius: 9px;
+  border: none;
   font-family: "Segoe UI", sans-serif;
+}}
+QFrame#SectionDivider {{
+  background: {tokens['border']};
+  border: none;
+  max-height: 1px;
+  min-height: 1px;
 }}
 QWidget#TitleBar {{
   background: {tokens['bg']};
