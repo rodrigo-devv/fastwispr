@@ -319,6 +319,61 @@ QPushButton#Chip:hover {{
   background: {tokens['surface_hover']};
   border-color: {tokens['border_hover']};
 }}
+QPushButton#Segment {{
+  background: transparent;
+  color: {tokens['text_secondary']};
+  border: 1px solid transparent;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 0 6px;
+  min-height: 26px;
+  max-height: 28px;
+}}
+QPushButton#Segment:hover {{
+  background: transparent;
+  color: {tokens['text']};
+  border: 1px solid transparent;
+}}
+QPushButton#Segment:checked {{
+  background: transparent;
+  color: #FFFFFF;
+  border: 1px solid transparent;
+  font-weight: 600;
+}}
+QPushButton#Segment:focus {{
+  border: 1px solid transparent;
+}}
+QComboBox {{
+  background: {tokens['surface']};
+  color: {tokens['text']};
+  border: 1px solid {tokens['border']};
+  border-radius: 5px;
+  padding: 0 8px;
+  min-height: {SEARCH_H}px;
+  font-size: 12px;
+  font-family: "Segoe UI", sans-serif;
+}}
+QComboBox:hover {{
+  border-color: {tokens['border_hover']};
+}}
+QComboBox:focus {{
+  border: 1px solid {tokens['accent']};
+}}
+QComboBox::drop-down {{
+  border: none;
+  width: 22px;
+}}
+QComboBox QAbstractItemView {{
+  background: {tokens['surface']};
+  color: {tokens['text']};
+  border: 1px solid {tokens['border']};
+  border-radius: 7px;
+  padding: 4px;
+  outline: none;
+  selection-background-color: {tokens['surface_hover']};
+  selection-color: {tokens['text']};
+}}
 QLineEdit, QPlainTextEdit {{
   background: {tokens['surface']};
   color: {tokens['text']};

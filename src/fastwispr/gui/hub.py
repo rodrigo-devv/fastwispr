@@ -7,6 +7,7 @@ from ..config import Config, load_config
 from ..config_edit import set_config_value
 from ..controller import DictationController
 from ..db import DictationEvent, Store
+from ..stt import normalize_language_mode
 from ..windows.settings_ui import apply_stt_preset_to_values, stt_preset_from_values
 from .theme import (
     CHIP_H,
@@ -33,12 +34,13 @@ from .theme import (
 )
 
 try:
-    from PySide6.QtCore import QEvent, QPoint, QRectF, QSize, Qt, QTimer, Signal
+    from PySide6.QtCore import Property, QEasingCurve, QEvent, QPoint, QPropertyAnimation, QRectF, QSize, Qt, QTimer, Signal
     from PySide6.QtGui import QColor, QCursor, QFont, QGuiApplication, QIcon, QPainter, QPainterPath, QPalette, QPen, QPixmap, QRegion
     from .icons import ICON_PX, icon_pixmap
     from PySide6.QtWidgets import (
         QApplication,
         QButtonGroup,
+        QComboBox,
         QDialog,
         QDialogButtonBox,
         QFrame,
@@ -240,6 +242,91 @@ class Hairline(QWidget):
         del event
         painter = QPainter(self)
         painter.fillRect(self.rect(), self._color)
+        painter.end()
+
+
+class Segmented(QWidget):
+    changed = Signal(str)
+
+    def __init__(self, options: list[str], current: str, tokens: dict[str, str], parent=None):
+        super().__init__(parent)
+        self._options = options
+        self._current = current if current in options else options[0]
+        self._tokens = tokens
+        self._gx = 0.0
+        self.setFixedSize(72 * len(options), 32)
+        row = QHBoxLayout(self)
+        row.setContentsMargins(2, 2, 2, 2)
+        row.setSpacing(0)
+        self._buttons: list[QPushButton] = []
+        for name in options:
+            btn = QPushButton(name)
+            btn.setObjectName("Segment")
+            btn.setCheckable(True)
+            btn.setChecked(name == self._current)
+            btn.setFocusPolicy(Qt.NoFocus)
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.clicked.connect(lambda _=False, n=name: self._pick(n))
+            row.addWidget(btn)
+            self._buttons.append(btn)
+        self._anim = QPropertyAnimation(self, b"gliderX", self)
+        self._anim.setDuration(220)
+        self._anim.setEasingCurve(QEasingCurve.OutCubic)
+
+    def _glider_x(self) -> float:
+        return self._gx
+
+    def _set_glider_x(self, value: float) -> None:
+        self._gx = float(value)
+        self.update()
+
+    gliderX = Property(float, _glider_x, _set_glider_x)
+
+    def _index(self) -> int:
+        return self._options.index(self._current)
+
+    def _slot_x(self, index: int) -> float:
+        inner = self.rect().adjusted(2, 2, -2, -2)
+        return inner.x() + index * (inner.width() / len(self._options))
+
+    def _pick(self, name: str) -> None:
+        if name == self._current:
+            return
+        self._current = name
+        for btn, option in zip(self._buttons, self._options):
+            btn.setChecked(option == name)
+        self._anim.stop()
+        self._anim.setStartValue(self._gx)
+        self._anim.setEndValue(self._slot_x(self._index()))
+        self._anim.start()
+        self.changed.emit(name)
+
+    def resizeEvent(self, event) -> None:  # noqa: N802
+        super().resizeEvent(event)
+        if self._anim.state() != QPropertyAnimation.Running:
+            self._gx = self._slot_x(self._index())
+
+    def showEvent(self, event) -> None:  # noqa: N802
+        super().showEvent(event)
+        self._gx = self._slot_x(self._index())
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        del event
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        track = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        path = QPainterPath()
+        path.addRoundedRect(track, 5, 5)
+        painter.fillPath(path, QColor(self._tokens["surface"]))
+        painter.setPen(QPen(QColor(self._tokens["border"]), 1))
+        painter.drawPath(path)
+        inner = self.rect().adjusted(2, 2, -2, -2)
+        slot = inner.width() / len(self._options)
+        glider = QRectF(self._gx, inner.y(), slot, inner.height())
+        blob = QPainterPath()
+        blob.addRoundedRect(glider, 4, 4)
+        painter.setPen(Qt.NoPen)
+        painter.fillPath(blob, QColor(self._tokens["accent"]))
         painter.end()
 
 
@@ -1030,7 +1117,7 @@ class AppShell(QWidget):
                         trailing=self._segmented(["Fast", "Balanced", "Accurate"], current_preset or "Balanced", self._apply_preset),
                     ),
                     self._settings_row("Model", value=model_chip_label(self.config.stt_model)),
-                    self._settings_row("Language", value=self.config.stt_language),
+                    self._settings_row("Language", trailing=self._language_combo()),
                     self._settings_row("Minimum seconds", trailing=self._field("dictation.min_record_seconds", f"{self.config.min_record_seconds:g}")),
                     self._settings_row("Minimum RMS", trailing=self._field("dictation.min_audio_rms", f"{self.config.min_audio_rms:g}")),
                 ],
@@ -1114,23 +1201,27 @@ class AppShell(QWidget):
         toggle.changed.connect(persist)
         return toggle
 
-    def _segmented(self, names: list[str], current: str, on_pick) -> QWidget:
-        wrap = QWidget()
-        row = QHBoxLayout(wrap)
-        row.setContentsMargins(0, 0, 0, 0)
-        row.setSpacing(4)
-        for name in names:
-            btn = QPushButton(name)
-            btn.setCheckable(True)
-            btn.setFixedHeight(28)
-            btn.setFocusPolicy(Qt.NoFocus)
-            selected = name == current
-            btn.setChecked(selected)
-            if selected:
-                btn.setObjectName("Primary")
-            btn.clicked.connect(lambda _=False, n=name: on_pick(n))
-            row.addWidget(btn)
-        return wrap
+    def _segmented(self, names: list[str], current: str, on_pick) -> Segmented:
+        control = Segmented(names, current, self._tokens)
+        control.changed.connect(on_pick)
+        return control
+
+    def _language_combo(self) -> QComboBox:
+        combo = QComboBox()
+        combo.setFocusPolicy(Qt.NoFocus)
+        combo.setFixedHeight(SEARCH_H)
+        combo.setMinimumWidth(118)
+        options = (("pt-en", "PT + EN"), ("pt", "Portuguese"), ("en", "English"), ("auto", "Auto"))
+        try:
+            mode = normalize_language_mode(self.config.stt_language)
+        except ValueError:
+            mode = "bilingual"
+        current = {"bilingual": "pt-en", "pt": "pt", "en": "en", "auto": "auto"}[mode]
+        for code, label in options:
+            combo.addItem(label, code)
+        combo.setCurrentIndex(next((i for i, item in enumerate(options) if item[0] == current), 0))
+        combo.currentIndexChanged.connect(lambda index: self._save_field("stt.language", str(combo.itemData(index))))
+        return combo
 
     def _field(self, key: str, value: str) -> QLineEdit:
         editor = QLineEdit(value)
