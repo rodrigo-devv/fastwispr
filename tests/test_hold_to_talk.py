@@ -140,10 +140,7 @@ def test_toggle_mode_starts_and_stops_on_mouse_down(monkeypatch):
     listener.on_down()
     app._drain_events()
     assert app.recording is True
-
-    listener.on_up()
-    app._drain_events()
-    assert app.recording is True
+    assert listener.on_up is None
 
     listener.on_down()
     app._drain_events()

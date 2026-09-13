@@ -392,6 +392,43 @@ class Select(QWidget):
         qp.end()
 
 
+class HotkeyBox(QWidget):
+    clicked = Signal()
+
+    def __init__(self, text: str, tokens: dict[str, str], parent=None):
+        super().__init__(parent)
+        self._text = text
+        self._tokens = tokens
+        self.setFixedSize(148, 34)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setFocusPolicy(Qt.NoFocus)
+
+    def setText(self, text: str) -> None:  # noqa: N802
+        self._text = text
+        self.update()
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit()
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        del event
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        track = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        path = QPainterPath()
+        path.addRoundedRect(track, 5, 5)
+        painter.fillPath(path, QColor(self._tokens["surface"]))
+        painter.setPen(QPen(QColor(self._tokens["border"]), 1))
+        painter.drawPath(path)
+        painter.setPen(QColor(self._tokens["text"]))
+        font = QFont("Segoe UI")
+        font.setPixelSize(12)
+        painter.setFont(font)
+        painter.drawText(track.adjusted(10, 0, -10, 0), Qt.AlignVCenter | Qt.AlignLeft, self._text)
+        painter.end()
+
+
 class HotkeyEditor(QWidget):
     saved = Signal(str)
 
@@ -410,11 +447,7 @@ class HotkeyEditor(QWidget):
         self._hint = QLabel("Press ESC to cancel")
         self._hint.setStyleSheet(f"color: {tokens['accent']}; font-size: 11px; font-weight: 600;")
         self._hint.hide()
-        self._box = QPushButton(" + ".join(hotkey_keycaps(hotkey)))
-        self._box.setObjectName("Select")
-        self._box.setFixedHeight(34)
-        self._box.setMinimumWidth(128)
-        self._box.setFocusPolicy(Qt.NoFocus)
+        self._box = HotkeyBox(" + ".join(hotkey_keycaps(hotkey)), tokens)
         self._box.clicked.connect(self._start)
         self._save = QPushButton("Save")
         self._save.setObjectName("Primary")
@@ -695,6 +728,9 @@ class AppShell(QWidget):
         self._ready = False
         self.status = "Ready"
         self._detail: DictationEvent | None = None
+        self._quitting = False
+        self.on_activation_mode: Callable[[str], None] | None = None
+        self.on_hotkey: Callable[[str], None] | None = None
         self.setObjectName("AppShell")
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Window)
@@ -892,14 +928,23 @@ class AppShell(QWidget):
         self.paste_card.show()
 
     def confirm_close(self) -> None:
+        if self._quitting:
+            return
         dialog = CloseDialog(self._tokens, self)
         dialog.exec()
         if dialog.choice == CloseDialog.MINIMIZE:
             self.showMinimized()
         elif dialog.choice == CloseDialog.QUIT:
-            QApplication.quit()
+            self.quit_app()
+
+    def quit_app(self) -> None:
+        self._quitting = True
+        QApplication.quit()
 
     def closeEvent(self, event) -> None:  # noqa: N802
+        if self._quitting:
+            event.accept()
+            return
         event.ignore()
         self.confirm_close()
 
@@ -1257,6 +1302,7 @@ class AppShell(QWidget):
                 "General",
                 [
                     self._settings_row("Save to clipboard", trailing=self._clipboard_toggle()),
+                    self._settings_row("Push to talk", trailing=self._ptt_toggle()),
                     self._settings_row(
                         "Theme",
                         trailing=self._segmented(
@@ -1317,10 +1363,8 @@ class AppShell(QWidget):
         col.setContentsMargins(0, 0, 0, 0)
         col.setSpacing(0)
         col.addWidget(self._section_header(title))
-        for index, row in enumerate(rows):
+        for row in rows:
             col.addWidget(row)
-            if index < len(rows) - 1:
-                col.addWidget(self._section_line())
         return box
 
     def _settings_row(self, label: str, trailing: QWidget | None = None, value: str | None = None) -> QWidget:
@@ -1362,12 +1406,27 @@ class AppShell(QWidget):
         toggle.changed.connect(persist)
         return toggle
 
+    def _ptt_toggle(self) -> Toggle:
+        toggle = Toggle(self.config.activation_mode == "hold", self._tokens)
+
+        def persist(on: bool) -> None:
+            mode = "hold" if on else "toggle"
+            set_config_value(self.config_path, "activation.mode", mode)
+            self.config = load_config(self.config_path)
+            if self.on_activation_mode is not None:
+                self.on_activation_mode(mode)
+
+        toggle.changed.connect(persist)
+        return toggle
+
     def _hotkey_row(self) -> HotkeyEditor:
         editor = HotkeyEditor(self.config.hotkey, self._tokens)
 
         def persist(hotkey: str) -> None:
             set_config_value(self.config_path, "hotkeys.dictate_toggle", hotkey)
             self.config = load_config(self.config_path)
+            if self.on_hotkey is not None:
+                self.on_hotkey(hotkey)
 
         editor.saved.connect(persist)
         return editor
@@ -1535,7 +1594,7 @@ def attach_tray(hub: AppShell, *, on_start: Callable[[], None], on_pause: Callab
     menu.addAction("Settings", lambda: (hub.open_hub(), hub.show_page("settings")))
     menu.addSeparator()
     menu.addAction("Pause hotkeys", on_pause)
-    menu.addAction("Quit", QApplication.quit)
+    menu.addAction("Quit", hub.quit_app)
     tray.setContextMenu(menu)
     tray.activated.connect(lambda reason: hub.open_hub() if reason == QSystemTrayIcon.Trigger else None)
     tray.show()

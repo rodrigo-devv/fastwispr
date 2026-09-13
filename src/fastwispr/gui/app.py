@@ -64,12 +64,26 @@ def run_qt_app(config: Config, *, config_path: Path | None = None, autostart: bo
         recorder=recorder,
         overlay=overlay,
         listener=listener,
-        activation_mode="toggle",
+        activation_mode=config.activation_mode if config.activation_mode in {"hold", "toggle"} else "toggle",
     )
     paused = {"value": False}
 
     def start_recording() -> None:
         dictation.post(dictation.toggle_recording)
+
+    def bind_listener(mode: str | None = None, hotkey: str | None = None) -> None:
+        if hotkey:
+            listener.hotkey = hotkey
+        if mode:
+            dictation.activation_mode = mode
+        listener.stop()
+        if dictation.activation_mode == "toggle":
+            listener.start(lambda: dictation.post(dictation.toggle_recording), None)
+        else:
+            listener.start(lambda: dictation.post(dictation.start_recording), lambda: dictation.post(dictation.stop_recording))
+
+    hub.on_activation_mode = lambda mode: bind_listener(mode=mode)
+    hub.on_hotkey = lambda hotkey: bind_listener(hotkey=hotkey)
 
     def pause_hotkeys() -> None:
         if paused["value"]:

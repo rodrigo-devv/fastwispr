@@ -47,7 +47,7 @@ class HoldToTalkDictationApp:
     def start(self) -> None:
         self.overlay.root.after(25, self._drain_events)
         if self.activation_mode == "toggle":
-            self.listener.start(lambda: self.post(self.toggle_recording), lambda: None)
+            self.listener.start(lambda: self.post(self.toggle_recording), None)
         else:
             self.listener.start(lambda: self.post(self.start_recording), lambda: self.post(self.stop_recording))
 

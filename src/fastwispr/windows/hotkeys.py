@@ -37,11 +37,18 @@ class KeyboardHotkeyListener:
         self.keyboard = cast(Any, keyboard_module)
         self.hotkey = hotkey
         self.handle: object | None = None
+        self.release_handle: object | None = None
 
-    def start(self, on_down: Callable[[], None], on_up: Callable[[], None]) -> None:
+    def start(self, on_down: Callable[[], None], on_up: Callable[[], None] | None = None) -> None:
         self.handle = self.keyboard.add_hotkey(self.hotkey, on_down, suppress=False)
+        self.release_handle = None
+        if on_up is not None:
+            self.release_handle = self.keyboard.add_hotkey(self.hotkey, on_up, suppress=False, trigger_on_release=True)
 
     def stop(self) -> None:
         if self.handle is not None:
             self.keyboard.remove_hotkey(self.handle)
             self.handle = None
+        if self.release_handle is not None:
+            self.keyboard.remove_hotkey(self.release_handle)
+            self.release_handle = None
