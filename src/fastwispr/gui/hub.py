@@ -16,6 +16,8 @@ from .theme import (
     HUB_MAX,
     HUB_MIN,
     PAGEBAR_H,
+    ROW_H,
+    SEARCH_H,
     TITLEBAR_H,
     app_qss,
     format_clock,
@@ -659,7 +661,9 @@ class AppShell(QWidget):
     def _section_line(self) -> QFrame:
         line = QFrame()
         line.setObjectName("SectionDivider")
+        line.setFrameShape(QFrame.NoFrame)
         line.setFixedHeight(1)
+        line.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         return line
 
     def _style_scroll(self, scroll: QScrollArea, inner: QWidget) -> None:
@@ -974,43 +978,65 @@ class AppShell(QWidget):
 
     def _build_settings(self) -> None:
         layout = self._clear("settings")
-        layout.setSpacing(16)
+        layout.setSpacing(0)
         scroll_wrap = QWidget()
         body = QVBoxLayout(scroll_wrap)
         body.setContentsMargins(0, 0, 0, 0)
-        body.setSpacing(16)
-        body.addWidget(self._section_header("General"))
-        body.addLayout(self._labeled_row("Save to clipboard", self._clipboard_toggle()))
-        body.addWidget(QLabel("Theme"))
-        body.addLayout(self._theme_row())
-        body.addWidget(QLabel(f"Hotkey  {self.config.hotkey}"))
-        body.addWidget(self._section_header("Dictation"))
-        body.addWidget(QLabel("Preset"))
-        body.addLayout(self._preset_row())
-        body.addWidget(QLabel(f"Model  {model_chip_label(self.config.stt_model)}"))
-        body.addWidget(QLabel(f"Language  {self.config.stt_language}"))
-        body.addLayout(self._labeled_field("Minimum seconds", "dictation.min_record_seconds", f"{self.config.min_record_seconds:g}"))
-        body.addLayout(self._labeled_field("Minimum RMS", "dictation.min_audio_rms", f"{self.config.min_audio_rms:g}"))
-        body.addWidget(self._section_header("Microphone"))
-        body.addWidget(QLabel("Input device  Default"))
-        body.addWidget(self._section_header("Cloud"))
-        wip = QLabel("WIP — launching later.")
-        wip.setObjectName("Secondary")
-        body.addWidget(wip)
+        body.setSpacing(24)
+        current_preset = stt_preset_from_values(
+            {
+                "stt.model": self.config.stt_model,
+                "stt.device": self.config.stt_device,
+                "stt.compute_type": self.config.stt_compute_type,
+            }
+        )
+        body.addWidget(
+            self._settings_block(
+                "General",
+                [
+                    self._settings_row("Save to clipboard", trailing=self._clipboard_toggle()),
+                    self._settings_row(
+                        "Theme",
+                        trailing=self._segmented(
+                            ["Dark", "Light", "System"],
+                            self.theme_preference.capitalize(),
+                            lambda name: self.set_theme(name.lower()),
+                        ),
+                    ),
+                    self._settings_row("Hotkey", value=" + ".join(hotkey_keycaps(self.config.hotkey))),
+                ],
+            )
+        )
+        body.addWidget(
+            self._settings_block(
+                "Dictation",
+                [
+                    self._settings_row(
+                        "Preset",
+                        trailing=self._segmented(["Fast", "Balanced", "Accurate"], current_preset or "Balanced", self._apply_preset),
+                    ),
+                    self._settings_row("Model", value=model_chip_label(self.config.stt_model)),
+                    self._settings_row("Language", value=self.config.stt_language),
+                    self._settings_row("Minimum seconds", trailing=self._field("dictation.min_record_seconds", f"{self.config.min_record_seconds:g}")),
+                    self._settings_row("Minimum RMS", trailing=self._field("dictation.min_audio_rms", f"{self.config.min_audio_rms:g}")),
+                ],
+            )
+        )
+        body.addWidget(self._settings_block("Microphone", [self._settings_row("Input device", value="Default")]))
+        body.addWidget(self._settings_block("Cloud", [self._settings_row("Coming later", value="WIP")]))
         body.addStretch(1)
-        about = QPushButton("About")
-        about.clicked.connect(lambda: self.show_page("about"))
-        body.addWidget(about)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setWidget(scroll_wrap)
         self._style_scroll(scroll, scroll_wrap)
         layout.addWidget(scroll, 1)
+        layout.addWidget(self._section_line())
+        layout.addWidget(self._about_button())
 
     def _section_header(self, title: str) -> QWidget:
         wrap = QWidget()
         row = QHBoxLayout(wrap)
-        row.setContentsMargins(0, 8, 0, 0)
+        row.setContentsMargins(0, 0, 0, 8)
         row.setSpacing(8)
         lbl = QLabel(title)
         lbl.setStyleSheet("font-size:14px; font-weight:600;")
@@ -1018,11 +1044,44 @@ class AppShell(QWidget):
         row.addWidget(self._section_line(), 1)
         return wrap
 
-    def _labeled_row(self, label: str, widget: QWidget) -> QHBoxLayout:
-        row = QHBoxLayout()
+    def _settings_block(self, title: str, rows: list[QWidget]) -> QWidget:
+        box = QWidget()
+        col = QVBoxLayout(box)
+        col.setContentsMargins(0, 0, 0, 0)
+        col.setSpacing(0)
+        col.addWidget(self._section_header(title))
+        for index, row in enumerate(rows):
+            col.addWidget(row)
+            if index < len(rows) - 1:
+                col.addWidget(self._section_line())
+        return box
+
+    def _settings_row(self, label: str, trailing: QWidget | None = None, value: str | None = None) -> QWidget:
+        wrap = QWidget()
+        wrap.setObjectName("SettingsRow")
+        wrap.setFixedHeight(ROW_H)
+        row = QHBoxLayout(wrap)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(8)
         row.addWidget(QLabel(label), 1)
-        row.addWidget(widget)
-        return row
+        if value is not None:
+            meta = QLabel(value)
+            meta.setObjectName("SettingsValue")
+            row.addWidget(meta)
+        if trailing is not None:
+            row.addWidget(trailing, 0, Qt.AlignVCenter)
+        return wrap
+
+    def _about_button(self) -> QPushButton:
+        btn = QPushButton("About")
+        btn.setObjectName("Chip")
+        btn.setFixedHeight(ROW_H)
+        btn.setIcon(QIcon(icon_pixmap("chevron-right", self._tokens["text_muted"], canvas=ICON_PX)))
+        btn.setIconSize(QSize(ICON_PX, ICON_PX))
+        btn.setLayoutDirection(Qt.RightToLeft)
+        btn.setFocusPolicy(Qt.NoFocus)
+        btn.clicked.connect(lambda: self.show_page("about"))
+        return btn
 
     def _clipboard_toggle(self) -> Toggle:
         toggle = Toggle(self.config.save_to_clipboard, self._tokens)
@@ -1036,45 +1095,30 @@ class AppShell(QWidget):
         toggle.changed.connect(persist)
         return toggle
 
-    def _theme_row(self) -> QHBoxLayout:
-        row = QHBoxLayout()
-        for name in ("dark", "light", "system"):
-            btn = QPushButton(name.capitalize())
-            btn.setCheckable(True)
-            btn.setChecked(self.theme_preference == name)
-            if self.theme_preference == name:
-                btn.setObjectName("Primary")
-            btn.clicked.connect(lambda _=False, n=name: self.set_theme(n))
-            row.addWidget(btn)
-        return row
-
-    def _preset_row(self) -> QHBoxLayout:
-        row = QHBoxLayout()
-        current = stt_preset_from_values(
-            {
-                "stt.model": self.config.stt_model,
-                "stt.device": self.config.stt_device,
-                "stt.compute_type": self.config.stt_compute_type,
-            }
-        )
-        for name in ("Fast", "Balanced", "Accurate"):
+    def _segmented(self, names: list[str], current: str, on_pick) -> QWidget:
+        wrap = QWidget()
+        row = QHBoxLayout(wrap)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(4)
+        for name in names:
             btn = QPushButton(name)
             btn.setCheckable(True)
-            btn.setChecked(current == name)
-            if current == name:
+            btn.setFixedHeight(28)
+            btn.setFocusPolicy(Qt.NoFocus)
+            selected = name == current
+            btn.setChecked(selected)
+            if selected:
                 btn.setObjectName("Primary")
-            btn.clicked.connect(lambda _=False, n=name: self._apply_preset(n))
+            btn.clicked.connect(lambda _=False, n=name: on_pick(n))
             row.addWidget(btn)
-        return row
+        return wrap
 
-    def _labeled_field(self, label: str, key: str, value: str) -> QHBoxLayout:
-        row = QHBoxLayout()
-        row.addWidget(QLabel(label), 1)
+    def _field(self, key: str, value: str) -> QLineEdit:
         editor = QLineEdit(value)
-        editor.setFixedWidth(88)
+        editor.setFixedSize(88, SEARCH_H)
+        editor.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         editor.editingFinished.connect(lambda k=key, e=editor: self._save_field(k, e.text()))
-        row.addWidget(editor)
-        return row
+        return editor
 
     def _save_field(self, key: str, value: str) -> None:
         try:

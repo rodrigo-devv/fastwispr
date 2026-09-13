@@ -206,6 +206,13 @@ QLabel#Hint {{
   color: {tokens['text_secondary']};
   font-size: 13px;
 }}
+QLabel#SettingsValue {{
+  color: {tokens['text_secondary']};
+  font-size: 12px;
+}}
+QWidget#SettingsRow {{
+  background: transparent;
+}}
 QFrame#ChromeDivider {{
   background: {tokens['border']};
   border: none;
