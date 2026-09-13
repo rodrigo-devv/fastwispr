@@ -93,19 +93,78 @@ def tray_icon_pixmap() -> QPixmap:
     return pix
 
 
+class ThemeSwitch(QWidget):
+    """Compact sun/moon track. Dark = knob right. Light = knob left."""
+
+    clicked = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._dark = True
+        self._gx = 28.0
+        self._tokens = theme_tokens("dark")
+        self.setFixedSize(46, 20)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setFocusPolicy(Qt.NoFocus)
+        self.setToolTip("Theme")
+        self._anim = QPropertyAnimation(self, b"knobX", self)
+        self._anim.setDuration(220)
+        self._anim.setEasingCurve(QEasingCurve.OutCubic)
+
+    def _knob_x(self) -> float:
+        return self._gx
+
+    def _set_knob_x(self, value: float) -> None:
+        self._gx = float(value)
+        self.update()
+
+    knobX = Property(float, _knob_x, _set_knob_x)
+
+    def set_dark(self, dark: bool, tokens: dict[str, str]) -> None:
+        self._tokens = tokens
+        self._dark = dark
+        target = 28.0 if dark else 2.0
+        if self.isVisible() and abs(self._gx - target) > 0.5:
+            self._anim.stop()
+            self._anim.setStartValue(self._gx)
+            self._anim.setEndValue(target)
+            self._anim.start()
+        else:
+            self._gx = target
+            self.update()
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit()
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        del event
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        track = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        path = QPainterPath()
+        path.addRoundedRect(track, 5, 5)
+        fill = QColor(self._tokens["surface_hover"] if self._dark else self._tokens["border"])
+        painter.fillPath(path, fill)
+        moon = icon_pixmap("moon", self._tokens["text_muted"] if self._dark else self._tokens["text"], size=12, canvas=12)
+        sun = icon_pixmap("sun", self._tokens["text_muted"] if not self._dark else self._tokens["text"], size=12, canvas=12)
+        painter.drawPixmap(4, 4, moon)
+        painter.drawPixmap(30, 4, sun)
+        knob = QRectF(self._gx, 2, 16, 16)
+        blob = QPainterPath()
+        blob.addRoundedRect(knob, 4, 4)
+        painter.fillPath(blob, QColor("#212121" if self._dark else "#F2F2F2"))
+        painter.end()
+
+
 class TitleBar(QWidget):
     def __init__(self, on_theme, on_min, on_close, parent=None):
         super().__init__(parent)
         self.setObjectName("TitleBar")
         self.setFixedHeight(TITLEBAR_H)
         self._drag: QPoint | None = None
-        self.theme_btn = QPushButton()
-        self.theme_btn.setObjectName("IconBtn")
-        self.theme_btn.setFixedSize(32, 32)
-        self.theme_btn.setToolTip("Theme")
-        self.theme_btn.setFocusPolicy(Qt.NoFocus)
-        self.theme_btn.setAutoDefault(False)
-        self.theme_btn.clicked.connect(on_theme)
+        self.theme_switch = ThemeSwitch()
+        self.theme_switch.clicked.connect(on_theme)
         self.minimize_btn = QPushButton()
         self.minimize_btn.setObjectName("CaptionBtn")
         self.minimize_btn.setToolTip("Minimize")
@@ -132,7 +191,7 @@ class TitleBar(QWidget):
         layout.addWidget(fast)
         layout.addWidget(wispr)
         layout.addStretch(1)
-        layout.addWidget(self.theme_btn)
+        layout.addWidget(self.theme_switch, 0, Qt.AlignVCenter)
         spacer = QWidget()
         spacer.setFixedWidth(8)
         layout.addWidget(spacer)
@@ -144,10 +203,7 @@ class TitleBar(QWidget):
         layout.addWidget(self.close_btn)
 
     def recolor(self, tokens: dict[str, str], resolved_theme: str) -> None:
-        # Dark UI shows a sun (switch to light); light UI shows a moon.
-        theme_icon = "sun" if resolved_theme == "dark" else "moon"
-        self.theme_btn.setIcon(QIcon(icon_pixmap(theme_icon, tokens["text_secondary"], size=ICON_PX, canvas=32)))
-        self.theme_btn.setIconSize(QSize(ICON_PX, ICON_PX))
+        self.theme_switch.set_dark(resolved_theme == "dark", tokens)
         self.minimize_btn.setIcon(QIcon(icon_pixmap("minus", tokens["text_secondary"], size=ICON_PX, canvas=40)))
         self.minimize_btn.setIconSize(QSize(ICON_PX, ICON_PX))
         self.close_btn.setIcon(QIcon(icon_pixmap("x", tokens["accent"], size=ICON_PX, canvas=40)))
@@ -1019,9 +1075,14 @@ class AppShell(QWidget):
             self.show_page(self._page, self._detail)
 
     def _cycle_theme(self) -> None:
-        order = ["dark", "light", "system"]
-        idx = order.index(self.theme_preference) if self.theme_preference in order else 0
-        self.set_theme(order[(idx + 1) % len(order)])
+        resolved = resolve_theme_name(self.theme_preference, True)
+        hints = QGuiApplication.styleHints()
+        if hints is not None:
+            try:
+                resolved = resolve_theme_name(self.theme_preference, hints.colorScheme() == Qt.ColorScheme.Dark)
+            except Exception:
+                pass
+        self.set_theme("light" if resolved == "dark" else "dark")
 
     def set_theme(self, name: str) -> None:
         self.theme_preference = name
@@ -1590,8 +1651,8 @@ class AppShell(QWidget):
         foot = QHBoxLayout(footer)
         foot.setContentsMargins(0, 16, 0, 0)
         foot.setSpacing(8)
-        foot.addWidget(self._footer_button("Dictionary", "book", lambda: self.show_page("dictionary"), outline=True), 1)
-        foot.addWidget(self._footer_button("Snippets", "quote", lambda: self.show_page("snippets"), outline=True), 1)
+        foot.addWidget(self._footer_button("Dictionary", "book", lambda: self.show_page("dictionary")), 1)
+        foot.addWidget(self._footer_button("Snippets", "quote", lambda: self.show_page("snippets")), 1)
         layout.addWidget(footer)
 
     def _section_header(self, title: str) -> QWidget:

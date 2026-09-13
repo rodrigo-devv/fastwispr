@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-# Lucide-style 24x24 stroke icons. Painted at 22px. No emoji.
+# Lucide-style 24x24 stroke icons. Painted at 18px. No emoji.
 
-ICON_PX = 22
+ICON_PX = 18
 ICON_NAMES = (
     "sun",
     "moon",
@@ -37,7 +37,7 @@ def icon_pixmap(name: str, color: str, *, size: int = ICON_PX, canvas: int | Non
     painter.setRenderHint(QPainter.Antialiasing)
     painter.translate((box - size) / 2, (box - size) / 2)
     painter.scale(size / 24.0, size / 24.0)
-    pen = QPen(QColor(color), 2.4)
+    pen = QPen(QColor(color), 2.0)
     pen.setCapStyle(Qt.RoundCap)
     pen.setJoinStyle(Qt.RoundJoin)
     painter.setPen(pen)
