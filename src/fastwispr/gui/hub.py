@@ -35,7 +35,7 @@ from .theme import (
 
 try:
     from PySide6.QtCore import Property, QEasingCurve, QEvent, QPoint, QPropertyAnimation, QRectF, QSize, Qt, QTimer, Signal
-    from PySide6.QtGui import QColor, QCursor, QFont, QGuiApplication, QIcon, QKeySequence, QPainter, QPainterPath, QPalette, QPen, QPixmap, QRegion
+    from PySide6.QtGui import QColor, QCursor, QFont, QGuiApplication, QIcon, QKeySequence, QPainter, QPainterPath, QPainterPathStroker, QPalette, QPen, QPixmap, QRegion
     from .icons import ICON_PX, icon_pixmap
     from PySide6.QtWidgets import (
         QApplication,
@@ -53,6 +53,7 @@ try:
         QRadioButton,
         QScrollArea,
         QSizePolicy,
+        QSlider,
         QStackedWidget,
         QSystemTrayIcon,
         QVBoxLayout,
@@ -425,7 +426,7 @@ class HotkeyBox(QWidget):
         font = QFont("Segoe UI")
         font.setPixelSize(12)
         painter.setFont(font)
-        painter.drawText(track.adjusted(10, 0, -10, 0), Qt.AlignVCenter | Qt.AlignLeft, self._text)
+        painter.drawText(track.adjusted(4, 0, -4, 0), Qt.AlignCenter, self._text)
         painter.end()
 
 
@@ -554,6 +555,44 @@ class Toggle(QWidget):
         painter.setBrush(QColor("#FFFFFF"))
         painter.drawEllipse(knob_x, 2, 14, 14)
         painter.end()
+
+
+class DragValue(QWidget):
+    changed = Signal(float)
+
+    def __init__(self, value: float, lo: float, hi: float, step: float, fmt: str, parent=None):
+        super().__init__(parent)
+        self._step = step
+        self._fmt = fmt
+        self.setFixedHeight(34)
+        self.setMinimumWidth(168)
+        row = QHBoxLayout(self)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(8)
+        self._slider = QSlider(Qt.Horizontal)
+        self._slider.setObjectName("Drag")
+        self._slider.setFocusPolicy(Qt.NoFocus)
+        self._slider.setMinimum(int(round(lo / step)))
+        self._slider.setMaximum(int(round(hi / step)))
+        self._slider.setValue(int(round(max(lo, min(hi, value)) / step)))
+        self._slider.setFixedHeight(18)
+        self._label = QLabel(fmt.format(value))
+        self._label.setObjectName("SettingsValue")
+        self._label.setFixedWidth(44)
+        self._label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        row.addWidget(self._slider, 1)
+        row.addWidget(self._label)
+        self._slider.valueChanged.connect(self._live)
+        self._slider.sliderReleased.connect(self._commit)
+
+    def _value(self) -> float:
+        return self._slider.value() * self._step
+
+    def _live(self, _raw: int) -> None:
+        self._label.setText(self._fmt.format(self._value()))
+
+    def _commit(self) -> None:
+        self.changed.emit(self._value())
 
 
 class TranscriptRow(QFrame):
@@ -952,9 +991,9 @@ class AppShell(QWidget):
         del event
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
-        rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        rect = QRectF(self.rect()).adjusted(1.0, 1.0, -1.0, -1.0)
         path = QPainterPath()
-        path.addRoundedRect(rect, 9, 9)
+        path.addRoundedRect(rect, 8, 8)
         painter.fillPath(path, QColor(self._tokens["bg"]))
         painter.setPen(QPen(QColor(self._tokens["border"]), 1))
         painter.drawPath(path)
@@ -962,8 +1001,13 @@ class AppShell(QWidget):
 
     def resizeEvent(self, event) -> None:  # noqa: N802
         path = QPainterPath()
-        path.addRoundedRect(QRectF(self.rect()), 9, 9)
-        self.setMask(QRegion(path.toFillPolygon().toPolygon()))
+        path.addRoundedRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), 9, 9)
+        stroker = QPainterPathStroker()
+        stroker.setWidth(3)
+        stroker.setJoinStyle(Qt.RoundJoin)
+        stroker.setCapStyle(Qt.RoundCap)
+        mask_path = path.united(stroker.createStroke(path))
+        self.setMask(QRegion(mask_path.toFillPolygon().toPolygon()))
         super().resizeEvent(event)
 
     def _section_line(self) -> QWidget:
@@ -1325,8 +1369,8 @@ class AppShell(QWidget):
                     ),
                     self._settings_row("Model", trailing=Select([(model_chip_label(self.config.stt_model), model_chip_label(self.config.stt_model))], model_chip_label(self.config.stt_model), self._tokens)),
                     self._settings_row("Language", trailing=self._language_select()),
-                    self._settings_row("Minimum seconds", trailing=self._field("dictation.min_record_seconds", f"{self.config.min_record_seconds:g}")),
-                    self._settings_row("Minimum RMS", trailing=self._field("dictation.min_audio_rms", f"{self.config.min_audio_rms:g}")),
+                    self._settings_row("Minimum seconds", trailing=self._drag("dictation.min_record_seconds", self.config.min_record_seconds, 0.10, 2.00, 0.05, "{:.2f}")),
+                    self._settings_row("Minimum RMS", trailing=self._drag("dictation.min_audio_rms", self.config.min_audio_rms, 0.001, 0.020, 0.001, "{:.3f}")),
                 ],
             )
         )
@@ -1448,6 +1492,11 @@ class AppShell(QWidget):
             control.changed.connect(lambda code: self._save_field("stt.language", code))
             return control
         return Select(options, options[0][0], self._tokens)
+
+    def _drag(self, key: str, value: float, lo: float, hi: float, step: float, fmt: str) -> DragValue:
+        control = DragValue(value, lo, hi, step, fmt)
+        control.changed.connect(lambda amount, k=key: self._save_field(k, f"{amount:g}"))
+        return control
 
     def _field(self, key: str, value: str) -> QLineEdit:
         editor = QLineEdit(value)

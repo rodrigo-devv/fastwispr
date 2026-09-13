@@ -393,6 +393,26 @@ QComboBox QAbstractItemView {{
   selection-background-color: {tokens['surface_hover']};
   selection-color: {tokens['text']};
 }}
+QSlider::groove:horizontal {{
+  height: 3px;
+  background: {tokens['border']};
+  border-radius: 2px;
+}}
+QSlider::sub-page:horizontal {{
+  background: {tokens['accent']};
+  border-radius: 2px;
+}}
+QSlider::handle:horizontal {{
+  width: 12px;
+  height: 12px;
+  margin: -5px 0;
+  background: {tokens['accent']};
+  border: none;
+  border-radius: 6px;
+}}
+QSlider::handle:horizontal:hover {{
+  background: {tokens['accent_hover']};
+}}
 QLineEdit, QPlainTextEdit {{
   background: {tokens['surface']};
   color: {tokens['text']};
