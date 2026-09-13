@@ -32,7 +32,7 @@ from .theme import (
 
 try:
     from PySide6.QtCore import QPoint, QRectF, QSize, Qt, QTimer
-    from PySide6.QtGui import QColor, QCursor, QFont, QGuiApplication, QIcon, QPainter, QPainterPath, QPen, QPixmap, QRegion
+    from PySide6.QtGui import QColor, QCursor, QFont, QGuiApplication, QIcon, QPainter, QPainterPath, QPalette, QPen, QPixmap, QRegion
     from .icons import ICON_PX, icon_pixmap
     from PySide6.QtWidgets import (
         QApplication,
@@ -419,6 +419,19 @@ class AppShell(QWidget):
         tokens = theme_tokens(self.theme_preference, system_dark)
         self._tokens = tokens
         self.setStyleSheet(app_qss(tokens))
+        pal = QPalette()
+        pal.setColor(QPalette.ColorRole.Window, QColor(tokens["bg"]))
+        pal.setColor(QPalette.ColorRole.Base, QColor(tokens["bg"]))
+        pal.setColor(QPalette.ColorRole.AlternateBase, QColor(tokens["surface"]))
+        pal.setColor(QPalette.ColorRole.Text, QColor(tokens["text"]))
+        pal.setColor(QPalette.ColorRole.WindowText, QColor(tokens["text"]))
+        pal.setColor(QPalette.ColorRole.Button, QColor(tokens["surface"]))
+        pal.setColor(QPalette.ColorRole.ButtonText, QColor(tokens["text"]))
+        pal.setColor(QPalette.ColorRole.PlaceholderText, QColor(tokens["text_muted"]))
+        self.setPalette(pal)
+        for page in self.pages.values():
+            page.setAutoFillBackground(True)
+            page.setPalette(pal)
         resolved = resolve_theme_name(self.theme_preference, system_dark)
         self.titlebar.recolor(tokens, resolved)
         if self.overlay is not None and hasattr(self.overlay, "set_theme_preference"):
@@ -570,6 +583,14 @@ class AppShell(QWidget):
         line.setFixedHeight(1)
         return line
 
+    def _style_scroll(self, scroll: QScrollArea, inner: QWidget) -> None:
+        bg = self._tokens["bg"]
+        inner.setAutoFillBackground(True)
+        inner.setStyleSheet(f"background: {bg};")
+        scroll.setStyleSheet(f"background: {bg}; border: none;")
+        scroll.viewport().setAutoFillBackground(True)
+        scroll.viewport().setStyleSheet(f"background: {bg};")
+
     def _clear(self, name: str) -> QVBoxLayout:
         widget = self.pages[name]
         layout = widget.layout()
@@ -680,6 +701,7 @@ class AppShell(QWidget):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setWidget(scroll_wrap)
+        self._style_scroll(scroll, scroll_wrap)
         layout.addWidget(scroll, 1)
 
         def refresh(text: str = "") -> None:
@@ -777,6 +799,7 @@ class AppShell(QWidget):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setWidget(wrap)
+        self._style_scroll(scroll, wrap)
         layout.addWidget(scroll, 1)
 
         def refresh(text: str = "") -> None:

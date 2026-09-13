@@ -351,6 +351,22 @@ QScrollArea {{
   border: none;
   background: {tokens['bg']};
 }}
+QScrollArea > QWidget > QWidget {{
+  background: {tokens['bg']};
+}}
+QAbstractScrollArea {{
+  background: {tokens['bg']};
+  border: none;
+}}
+QStackedWidget {{
+  background: {tokens['bg']};
+}}
+QStackedWidget > QWidget {{
+  background: {tokens['bg']};
+}}
+QFrame {{
+  color: {tokens['text']};
+}}
 """
 
 

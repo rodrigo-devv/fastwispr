@@ -7,8 +7,8 @@ from typing import Callable
 from .theme import OVERLAY_H, OVERLAY_MIN_W, OVERLAY_PAD_X, overlay_enter_pos, overlay_rest_pos, theme_tokens
 
 try:
-    from PySide6.QtCore import QEasingCurve, QParallelAnimationGroup, QPoint, QPropertyAnimation, QRect, Qt, QTimer
-    from PySide6.QtGui import QColor, QCursor, QFont, QGuiApplication, QPainter, QPainterPath, QPen
+    from PySide6.QtCore import QEasingCurve, QParallelAnimationGroup, QPoint, QPropertyAnimation, QRect, QRectF, Qt, QTimer
+    from PySide6.QtGui import QColor, QCursor, QFont, QGuiApplication, QPainter, QPainterPath, QPen, QRegion
     from PySide6.QtWidgets import QApplication, QWidget
 except ImportError as exc:  # pragma: no cover - optional extra
     raise RuntimeError("Install the GUI extra with: python -m pip install -e '.[gui]'") from exc
@@ -43,6 +43,7 @@ class QtRecordingOverlay(QWidget):
         self._tick.timeout.connect(self._on_tick)
         self._tick.start(33)
         self._anim_group: QParallelAnimationGroup | None = None
+        self._hide_gen = 0
         self.hide()
 
     def after(self, ms: int, callback) -> None:
@@ -88,6 +89,7 @@ class QtRecordingOverlay(QWidget):
             self.hide_overlay()
             return
         self._resize_for_state()
+        self._apply_pill_mask()
         visible = self.isVisible() and self.windowOpacity() > 0.05
         if visible:
             rest = self._rest_point()
@@ -95,8 +97,16 @@ class QtRecordingOverlay(QWidget):
         else:
             self._animate(show=True)
         self.update()
+        self._hide_gen += 1
+        token = self._hide_gen
         if mapped == "success":
-            self.after(700, self.hide_overlay)
+            self.after(700, lambda t=token: self._auto_hide(t))
+        elif mapped == "error":
+            self.after(10_000, lambda t=token: self._auto_hide(t))
+
+    def _auto_hide(self, token: int) -> None:
+        if token == self._hide_gen and self.state in {"success", "error"}:
+            self.hide_overlay()
 
     def mousePressEvent(self, event) -> None:  # noqa: N802
         if self.state == "error" and self._retry_rect.contains(event.pos()):
@@ -116,9 +126,10 @@ class QtRecordingOverlay(QWidget):
         painter.setRenderHint(QPainter.Antialiasing)
         tokens = self._tokens
         path = QPainterPath()
-        path.addRoundedRect(QRect(0, 0, self.width(), self.height()), 999, 999)
-        painter.fillPath(path, QColor("#111315"))
-        painter.setPen(QPen(QColor("#272A2E"), 1))
+        radius = (OVERLAY_H - 1) / 2
+        path.addRoundedRect(QRectF(0.5, 0.5, self.width() - 1.0, self.height() - 1.0), radius, radius)
+        painter.fillPath(path, QColor(tokens["surface"]))
+        painter.setPen(QPen(QColor(tokens["border"]), 1))
         painter.drawPath(path)
         if self.state == "recording":
             self._paint_recording(painter, tokens)
@@ -131,8 +142,14 @@ class QtRecordingOverlay(QWidget):
         painter.end()
 
     def _resize_for_state(self) -> None:
-        widths = {"recording": 176, "processing": 188, "success": 140, "error": 248}
-        self.setFixedSize(widths.get(self.state, OVERLAY_MIN_W), OVERLAY_H)
+        widths = {"recording": 228, "processing": 196, "success": 148, "error": 252}
+        self.setFixedSize(widths.get(self.state, 168), OVERLAY_H)
+
+    def _apply_pill_mask(self) -> None:
+        path = QPainterPath()
+        radius = OVERLAY_H / 2
+        path.addRoundedRect(QRectF(0, 0, self.width(), self.height()), radius, radius)
+        self.setMask(QRegion(path.toFillPolygon().toPolygon()))
 
     def _avail(self) -> QRect:
         screen = QGuiApplication.screenAt(QCursor.pos()) or QApplication.primaryScreen()
