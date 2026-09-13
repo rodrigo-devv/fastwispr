@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-# Lucide-style 24x24 stroke icons. Painted at 18px. No emoji.
+# Lucide-style 24x24 stroke icons. Painted at 22px. No emoji.
 
-ICON_PX = 18
+ICON_PX = 22
 ICON_NAMES = (
     "sun",
     "moon",
@@ -16,6 +16,7 @@ ICON_NAMES = (
     "check",
     "settings",
     "mic",
+    "trash",
 )
 
 
@@ -96,3 +97,11 @@ def _stroke(painter, name: str) -> None:
         painter.drawArc(7, 11, 10, 9, 0, -180 * 16)
         painter.drawLine(12, 20, 12, 22)
         painter.drawLine(9, 22, 15, 22)
+    elif name == "trash":
+        painter.drawLine(5, 7, 19, 7)
+        painter.drawLine(9, 7, 9, 4)
+        painter.drawLine(9, 4, 15, 4)
+        painter.drawLine(15, 4, 15, 7)
+        painter.drawRoundedRect(6, 7, 12, 13, 2, 2)
+        painter.drawLine(10, 11, 10, 16)
+        painter.drawLine(14, 11, 14, 16)

@@ -57,13 +57,13 @@ class DictationController:
         started = time.monotonic() if started is None else started
         stats = analyze_wav(audio_path)
         if not stats.valid:
-            self._record_skipped_event("invalid_audio", stats, app_name, started)
+            self.last_paste_ok = False
             return ""
         if stats.duration_seconds < self.min_record_seconds:
-            self._record_skipped_event("too_short", stats, app_name, started)
+            self.last_paste_ok = False
             return ""
         if stats.rms_level < self.min_audio_rms:
-            self._record_skipped_event("silence", stats, app_name, started)
+            self.last_paste_ok = False
             return ""
 
         stt_started = time.monotonic()
@@ -73,7 +73,6 @@ class DictationController:
         final = process_text_with_store(raw, self.store, app_name).final
         if not final.strip():
             self.last_paste_ok = False
-            self._record_skipped_event("empty_transcript", stats, app_name, started, stt_latency_ms=stt_latency_ms)
             return ""
 
         latency_ms = int((time.monotonic() - started) * 1000)

@@ -127,8 +127,7 @@ def test_controller_skips_recordings_shorter_than_min_duration(tmp_path: Path):
         assert final == ""
         assert stt.calls == 0
         assert injector.calls == 0
-        assert row["skipped_reason"] == "too_short"
-        assert 190 <= row["audio_duration_ms"] <= 210
+        assert row is None
 
 
 def test_controller_skips_silence_before_stt(tmp_path: Path):
@@ -145,8 +144,7 @@ def test_controller_skips_silence_before_stt(tmp_path: Path):
         assert final == ""
         assert stt.calls == 0
         assert injector.calls == 0
-        assert row["skipped_reason"] == "silence"
-        assert row["audio_rms"] == 0.0
+        assert row is None
 
 
 def test_controller_skips_invalid_audio_before_stt(tmp_path: Path):
@@ -164,7 +162,7 @@ def test_controller_skips_invalid_audio_before_stt(tmp_path: Path):
         assert final == ""
         assert stt.calls == 0
         assert injector.calls == 0
-        assert row["skipped_reason"] == "invalid_audio"
+        assert row is None
 
 
 def test_controller_logs_language_audio_and_latency_metrics(tmp_path: Path):

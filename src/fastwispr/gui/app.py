@@ -83,6 +83,7 @@ def run_qt_app(config: Config, *, config_path: Path | None = None, autostart: bo
 
     def finish_and_notify() -> None:
         original_finish()
+        hub.transcript_ready.emit()
         if getattr(controller, "last_paste_ok", True) is False and controller.last_completed_text():
             hub.show_paste_failed()
 

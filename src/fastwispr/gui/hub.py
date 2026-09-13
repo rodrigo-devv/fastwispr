@@ -31,7 +31,7 @@ from .theme import (
 )
 
 try:
-    from PySide6.QtCore import QPoint, QRectF, QSize, Qt, QTimer
+    from PySide6.QtCore import QEvent, QPoint, QRectF, QSize, Qt, QTimer, Signal
     from PySide6.QtGui import QColor, QCursor, QFont, QGuiApplication, QIcon, QPainter, QPainterPath, QPalette, QPen, QPixmap, QRegion
     from .icons import ICON_PX, icon_pixmap
     from PySide6.QtWidgets import (
@@ -98,14 +98,18 @@ class TitleBar(QWidget):
         self.theme_btn.setObjectName("IconBtn")
         self.theme_btn.setFixedSize(32, 32)
         self.theme_btn.setToolTip("Theme")
+        self.theme_btn.setFocusPolicy(Qt.NoFocus)
+        self.theme_btn.setAutoDefault(False)
         self.theme_btn.clicked.connect(on_theme)
         self.minimize_btn = QPushButton()
         self.minimize_btn.setObjectName("CaptionBtn")
         self.minimize_btn.setToolTip("Minimize")
+        self.minimize_btn.setFocusPolicy(Qt.NoFocus)
         self.minimize_btn.clicked.connect(on_min)
         self.close_btn = QPushButton()
         self.close_btn.setObjectName("CaptionClose")
         self.close_btn.setToolTip("Close")
+        self.close_btn.setFocusPolicy(Qt.NoFocus)
         self.close_btn.clicked.connect(on_close)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(16, 0, 0, 0)
@@ -222,13 +226,13 @@ class StatusDot(QWidget):
 
 
 class TranscriptRow(QFrame):
-    def __init__(self, event: DictationEvent, on_copy, on_open, tokens: dict[str, str] | None = None, parent=None):
+    def __init__(self, event: DictationEvent, on_copy, on_open, tokens: dict[str, str] | None = None, on_delete=None, parent=None):
         super().__init__(parent)
         palette = tokens or theme_tokens("dark")
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 8, 0, 8)
         col = QVBoxLayout()
-        text = QLabel(event.final_text.replace("\n", " ")[:90] or "Transcription failed")
+        text = QLabel(event.final_text.replace("\n", " ")[:90])
         text.setWordWrap(True)
         meta = QLabel(history_meta_line(event.created_at, event.audio_duration_ms))
         meta.setObjectName("Meta")
@@ -239,10 +243,21 @@ class TranscriptRow(QFrame):
         copy_btn.setObjectName("CopyBtn")
         copy_btn.setFixedSize(COPY_BTN, COPY_BTN)
         copy_btn.setToolTip("Copy")
+        copy_btn.setFocusPolicy(Qt.NoFocus)
         copy_btn.setIcon(QIcon(icon_pixmap("copy", palette["text_secondary"], size=ICON_PX, canvas=28)))
         copy_btn.setIconSize(QSize(ICON_PX, ICON_PX))
         copy_btn.clicked.connect(lambda: on_copy(event.final_text))
         layout.addWidget(copy_btn, 0, Qt.AlignTop)
+        if on_delete is not None:
+            delete_btn = QPushButton()
+            delete_btn.setObjectName("CopyBtn")
+            delete_btn.setFixedSize(COPY_BTN, COPY_BTN)
+            delete_btn.setToolTip("Delete")
+            delete_btn.setFocusPolicy(Qt.NoFocus)
+            delete_btn.setIcon(QIcon(icon_pixmap("trash", palette["text_muted"], size=ICON_PX, canvas=28)))
+            delete_btn.setIconSize(QSize(ICON_PX, ICON_PX))
+            delete_btn.clicked.connect(lambda: on_delete(event))
+            layout.addWidget(delete_btn, 0, Qt.AlignTop)
         self.mousePressEvent = lambda ev: on_open(event) if ev.button() == Qt.LeftButton else None  # type: ignore[method-assign]
 
 
@@ -350,6 +365,7 @@ class CloseDialog(QDialog):
 
 
 class AppShell(QWidget):
+    transcript_ready = Signal()
     def __init__(
         self,
         config: Config,
@@ -360,6 +376,10 @@ class AppShell(QWidget):
         parent=None,
     ):
         super().__init__(parent)
+        self.transcript_ready.connect(self.note_transcript)
+        app = QApplication.instance()
+        if app is not None:
+            app.installEventFilter(self)
         self.config = config
         self.store = store
         self.config_path = config_path
@@ -401,6 +421,26 @@ class AppShell(QWidget):
         self.apply_theme()
         self._ready = True
         self.show_page("home")
+
+    def eventFilter(self, watched, event) -> bool:  # noqa: N802
+        # Space must not activate the theme button (or any hub button).
+        if event.type() == QEvent.Type.KeyPress and event.key() == Qt.Key_Space:
+            if isinstance(watched, QPushButton) and (watched is self or self.isAncestorOf(watched)):
+                return True
+        return super().eventFilter(watched, event)
+
+    def note_transcript(self) -> None:
+        if self._page in {"home", "history"}:
+            self.show_page(self._page)
+
+    def _delete_event(self, event: DictationEvent) -> None:
+        self.store.delete_dictation_event(event.id)
+        if self._detail is not None and self._detail.id == event.id:
+            self._detail = None
+            self.show_page("history")
+            return
+        if self._page in {"home", "history"}:
+            self.show_page(self._page)
 
     def place_on_tray_screen(self) -> None:
         screen = QGuiApplication.screenAt(QCursor.pos()) or QGuiApplication.primaryScreen()
@@ -649,7 +689,7 @@ class AppShell(QWidget):
             empty.setObjectName("Secondary")
             layout.addWidget(empty)
         for event in events:
-            layout.addWidget(TranscriptRow(event, self.copy_text, lambda ev: self.show_page("detail", ev), tokens=self._tokens))
+            layout.addWidget(TranscriptRow(event, self.copy_text, lambda ev: self.show_page("detail", ev), tokens=self._tokens, on_delete=self._delete_event))
         layout.addStretch(1)
         layout.addWidget(self._section_line())
         footer = QHBoxLayout()
@@ -710,7 +750,7 @@ class AppShell(QWidget):
                 child = item.widget()
                 if child is not None:
                     child.deleteLater()
-            events = self.store.recent_dictation_events(limit=80, query=text.strip() or None)
+            events = self.store.recent_dictation_events(limit=80, query=text.strip() or None, transcripts_only=True)
             grouped: dict[str, list[DictationEvent]] = {}
             for event in events:
                 grouped.setdefault(history_group_label(event.created_at), []).append(event)
@@ -737,7 +777,7 @@ class AppShell(QWidget):
                 header.setStyleSheet("font-size:14px; font-weight:600;")
                 host.addWidget(header)
                 for event in rows:
-                    host.addWidget(TranscriptRow(event, self.copy_text, lambda ev: self.show_page("detail", ev), tokens=self._tokens))
+                    host.addWidget(TranscriptRow(event, self.copy_text, lambda ev: self.show_page("detail", ev), tokens=self._tokens, on_delete=self._delete_event))
 
         search.textChanged.connect(refresh)
         refresh()
@@ -768,9 +808,12 @@ class AppShell(QWidget):
         edit.clicked.connect(lambda: self._edit_event(event))
         retry = QPushButton("Retry")
         retry.clicked.connect(lambda: self.controller.retry_paste(event.final_text) if self.controller else None)
+        delete = QPushButton("Delete")
+        delete.clicked.connect(lambda: self._delete_event(event))
         row.addWidget(copy_btn)
         row.addWidget(edit)
         row.addWidget(retry)
+        row.addWidget(delete)
         layout.addLayout(row)
 
     def _edit_event(self, event: DictationEvent) -> None:
