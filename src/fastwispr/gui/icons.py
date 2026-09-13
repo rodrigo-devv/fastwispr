@@ -11,6 +11,7 @@ ICON_NAMES = (
     "copy",
     "chevron-left",
     "chevron-right",
+    "chevron-down",
     "clock",
     "search",
     "check",
@@ -56,6 +57,9 @@ def _stroke(painter, name: str) -> None:
     elif name == "chevron-right":
         painter.drawLine(9, 18, 15, 12)
         painter.drawLine(15, 12, 9, 6)
+    elif name == "chevron-down":
+        painter.drawLine(6, 9, 12, 15)
+        painter.drawLine(12, 15, 18, 9)
     elif name == "copy":
         painter.drawRoundedRect(8, 8, 12, 12, 2, 2)
         painter.drawLine(8, 16, 6, 16)

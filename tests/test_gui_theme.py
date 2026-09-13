@@ -46,7 +46,7 @@ def test_home_copy_uses_real_model_and_ctrl_space():
 def test_lucide_icon_catalog_covers_chrome():
     from fastwispr.gui.icons import ICON_NAMES, ICON_PX
 
-    for name in ("sun", "moon", "minus", "x", "copy", "chevron-left", "chevron-right", "settings", "mic", "trash"):
+    for name in ("sun", "moon", "minus", "x", "copy", "chevron-left", "chevron-right", "chevron-down", "settings", "mic", "trash"):
         assert name in ICON_NAMES
     assert ICON_PX == 22
 

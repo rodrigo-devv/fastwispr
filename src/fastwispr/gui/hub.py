@@ -35,12 +35,11 @@ from .theme import (
 
 try:
     from PySide6.QtCore import Property, QEasingCurve, QEvent, QPoint, QPropertyAnimation, QRectF, QSize, Qt, QTimer, Signal
-    from PySide6.QtGui import QColor, QCursor, QFont, QGuiApplication, QIcon, QPainter, QPainterPath, QPalette, QPen, QPixmap, QRegion
+    from PySide6.QtGui import QColor, QCursor, QFont, QGuiApplication, QIcon, QKeySequence, QPainter, QPainterPath, QPalette, QPen, QPixmap, QRegion
     from .icons import ICON_PX, icon_pixmap
     from PySide6.QtWidgets import (
         QApplication,
         QButtonGroup,
-        QComboBox,
         QDialog,
         QDialogButtonBox,
         QFrame,
@@ -254,21 +253,9 @@ class Segmented(QWidget):
         self._current = current if current in options else options[0]
         self._tokens = tokens
         self._gx = 0.0
-        self.setFixedSize(72 * len(options), 32)
-        row = QHBoxLayout(self)
-        row.setContentsMargins(2, 2, 2, 2)
-        row.setSpacing(0)
-        self._buttons: list[QPushButton] = []
-        for name in options:
-            btn = QPushButton(name)
-            btn.setObjectName("Segment")
-            btn.setCheckable(True)
-            btn.setChecked(name == self._current)
-            btn.setFocusPolicy(Qt.NoFocus)
-            btn.setCursor(Qt.PointingHandCursor)
-            btn.clicked.connect(lambda _=False, n=name: self._pick(n))
-            row.addWidget(btn)
-            self._buttons.append(btn)
+        self.setFixedSize(76 * len(options), 32)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setFocusPolicy(Qt.NoFocus)
         self._anim = QPropertyAnimation(self, b"gliderX", self)
         self._anim.setDuration(220)
         self._anim.setEasingCurve(QEasingCurve.OutCubic)
@@ -285,30 +272,103 @@ class Segmented(QWidget):
     def _index(self) -> int:
         return self._options.index(self._current)
 
-    def _slot_x(self, index: int) -> float:
-        inner = self.rect().adjusted(2, 2, -2, -2)
-        return inner.x() + index * (inner.width() / len(self._options))
+    def _slot_rect(self, index: int) -> QRectF:
+        inner = QRectF(self.rect()).adjusted(2, 2, -2, -2)
+        slot = inner.width() / len(self._options)
+        return QRectF(inner.x() + index * slot, inner.y(), slot, inner.height())
 
     def _pick(self, name: str) -> None:
         if name == self._current:
             return
         self._current = name
-        for btn, option in zip(self._buttons, self._options):
-            btn.setChecked(option == name)
         self._anim.stop()
         self._anim.setStartValue(self._gx)
-        self._anim.setEndValue(self._slot_x(self._index()))
+        self._anim.setEndValue(self._slot_rect(self._index()).x())
         self._anim.start()
         self.changed.emit(name)
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802
+        if event.button() != Qt.LeftButton:
+            return
+        inner = QRectF(self.rect()).adjusted(2, 2, -2, -2)
+        slot = inner.width() / len(self._options)
+        index = int((event.position().x() - inner.x()) / slot)
+        index = max(0, min(len(self._options) - 1, index))
+        self._pick(self._options[index])
 
     def resizeEvent(self, event) -> None:  # noqa: N802
         super().resizeEvent(event)
         if self._anim.state() != QPropertyAnimation.Running:
-            self._gx = self._slot_x(self._index())
+            self._gx = self._slot_rect(self._index()).x()
 
     def showEvent(self, event) -> None:  # noqa: N802
         super().showEvent(event)
-        self._gx = self._slot_x(self._index())
+        self._gx = self._slot_rect(self._index()).x()
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        del event
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.TextAntialiasing)
+        track = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        path = QPainterPath()
+        path.addRoundedRect(track, 5, 5)
+        painter.fillPath(path, QColor(self._tokens["surface"]))
+        painter.setPen(QPen(QColor(self._tokens["border"]), 1))
+        painter.drawPath(path)
+        glider = self._slot_rect(0)
+        glider.moveLeft(self._gx)
+        blob = QPainterPath()
+        blob.addRoundedRect(glider, 4, 4)
+        painter.setPen(Qt.NoPen)
+        painter.fillPath(blob, QColor(self._tokens["accent"]))
+        font = QFont("Segoe UI")
+        font.setPixelSize(12)
+        for index, name in enumerate(self._options):
+            selected = index == self._index()
+            font.setBold(selected)
+            painter.setFont(font)
+            painter.setPen(QColor("#FFFFFF" if selected else self._tokens["text_secondary"]))
+            painter.drawText(self._slot_rect(index), Qt.AlignCenter, name)
+        painter.end()
+
+
+class Select(QWidget):
+    changed = Signal(str)
+
+    def __init__(self, options: list[tuple[str, str]], current: str, tokens: dict[str, str], parent=None):
+        super().__init__(parent)
+        self._options = options
+        self._current = current if any(code == current for code, _label in options) else options[0][0]
+        self._tokens = tokens
+        self.setFixedHeight(34)
+        self.setMinimumWidth(138)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setFocusPolicy(Qt.NoFocus)
+
+    def _label(self) -> str:
+        for code, label in self._options:
+            if code == self._current:
+                return label
+        return self._options[0][1]
+
+    def _pick(self, code: str) -> None:
+        if code == self._current:
+            return
+        self._current = code
+        self.update()
+        self.changed.emit(code)
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802
+        if event.button() != Qt.LeftButton:
+            return
+        menu = QMenu(self)
+        for code, label in self._options:
+            action = menu.addAction(label)
+            action.setCheckable(True)
+            action.setChecked(code == self._current)
+            action.triggered.connect(lambda _=False, c=code: self._pick(c))
+        menu.exec(self.mapToGlobal(self.rect().bottomLeft()))
 
     def paintEvent(self, event) -> None:  # noqa: N802
         del event
@@ -320,14 +380,115 @@ class Segmented(QWidget):
         painter.fillPath(path, QColor(self._tokens["surface"]))
         painter.setPen(QPen(QColor(self._tokens["border"]), 1))
         painter.drawPath(path)
-        inner = self.rect().adjusted(2, 2, -2, -2)
-        slot = inner.width() / len(self._options)
-        glider = QRectF(self._gx, inner.y(), slot, inner.height())
-        blob = QPainterPath()
-        blob.addRoundedRect(glider, 4, 4)
-        painter.setPen(Qt.NoPen)
-        painter.fillPath(blob, QColor(self._tokens["accent"]))
+        painter.setPen(QColor(self._tokens["text"]))
+        font = QFont("Segoe UI")
+        font.setPixelSize(12)
+        painter.setFont(font)
+        painter.drawText(track.adjusted(10, 0, -28, 0), Qt.AlignVCenter | Qt.AlignLeft, self._label())
         painter.end()
+        chev = icon_pixmap("chevron-down", self._tokens["text_muted"], canvas=ICON_PX)
+        qp = QPainter(self)
+        qp.drawPixmap(self.width() - ICON_PX - 8, (self.height() - ICON_PX) // 2, chev)
+        qp.end()
+
+
+class HotkeyEditor(QWidget):
+    saved = Signal(str)
+
+    def __init__(self, hotkey: str, tokens: dict[str, str], parent=None):
+        super().__init__(parent)
+        self._value = hotkey
+        self._draft = hotkey
+        self._recording = False
+        self._tokens = tokens
+        self.setFixedHeight(ROW_H)
+        self.setFocusPolicy(Qt.StrongFocus)
+        row = QHBoxLayout(self)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(8)
+        self._label = QLabel("Hotkey")
+        self._hint = QLabel("Press ESC to cancel")
+        self._hint.setStyleSheet(f"color: {tokens['accent']}; font-size: 11px; font-weight: 600;")
+        self._hint.hide()
+        self._box = QPushButton(" + ".join(hotkey_keycaps(hotkey)))
+        self._box.setObjectName("Select")
+        self._box.setFixedHeight(34)
+        self._box.setMinimumWidth(128)
+        self._box.setFocusPolicy(Qt.NoFocus)
+        self._box.clicked.connect(self._start)
+        self._save = QPushButton("Save")
+        self._save.setObjectName("Primary")
+        self._save.setFixedSize(56, 34)
+        self._save.setFocusPolicy(Qt.NoFocus)
+        self._save.hide()
+        self._save.clicked.connect(self._commit)
+        row.addWidget(self._label, 1)
+        row.addWidget(self._hint, 1)
+        row.addWidget(self._box)
+        row.addWidget(self._save)
+
+    def _start(self) -> None:
+        self._recording = True
+        self._label.hide()
+        self._hint.show()
+        self._save.show()
+        self._box.setText("Press keys")
+        self.setFocus(Qt.MouseFocusReason)
+        self.grabKeyboard()
+
+    def _stop(self) -> None:
+        self._recording = False
+        self.releaseKeyboard()
+        self._hint.hide()
+        self._save.hide()
+        self._label.show()
+        self._box.setText(" + ".join(hotkey_keycaps(self._value)))
+
+    def _commit(self) -> None:
+        if self._draft:
+            self._value = self._draft
+            self.saved.emit(self._value)
+        self._stop()
+
+    def keyPressEvent(self, event) -> None:  # noqa: N802
+        if not self._recording:
+            super().keyPressEvent(event)
+            return
+        if event.key() == Qt.Key_Escape:
+            self._draft = self._value
+            self._stop()
+            return
+        combo = event_to_hotkey(event)
+        if combo:
+            self._draft = combo
+            self._box.setText(" + ".join(hotkey_keycaps(combo)))
+
+    def hideEvent(self, event) -> None:  # noqa: N802
+        if self._recording:
+            self._draft = self._value
+            self._stop()
+        super().hideEvent(event)
+
+
+def event_to_hotkey(event) -> str | None:
+    key = event.key()
+    if key in {Qt.Key_Escape, Qt.Key_Control, Qt.Key_Shift, Qt.Key_Alt, Qt.Key_Meta, Qt.Key_unknown}:
+        return None
+    parts: list[str] = []
+    mods = event.modifiers()
+    if mods & Qt.KeyboardModifier.ControlModifier:
+        parts.append("ctrl")
+    if mods & Qt.KeyboardModifier.AltModifier:
+        parts.append("alt")
+    if mods & Qt.KeyboardModifier.ShiftModifier:
+        parts.append("shift")
+    if mods & Qt.KeyboardModifier.MetaModifier:
+        parts.append("win")
+    token = QKeySequence(key).toString().strip().lower().replace(" ", "")
+    if not token or token in parts:
+        return None
+    parts.append(token)
+    return "+".join(parts)
 
 
 class Toggle(QWidget):
@@ -1104,7 +1265,7 @@ class AppShell(QWidget):
                             lambda name: self.set_theme(name.lower()),
                         ),
                     ),
-                    self._settings_row("Hotkey", value=" + ".join(hotkey_keycaps(self.config.hotkey))),
+                    self._hotkey_row(),
                 ],
             )
         )
@@ -1116,14 +1277,14 @@ class AppShell(QWidget):
                         "Preset",
                         trailing=self._segmented(["Fast", "Balanced", "Accurate"], current_preset or "Balanced", self._apply_preset),
                     ),
-                    self._settings_row("Model", value=model_chip_label(self.config.stt_model)),
-                    self._settings_row("Language", trailing=self._language_combo()),
+                    self._settings_row("Model", trailing=Select([(model_chip_label(self.config.stt_model), model_chip_label(self.config.stt_model))], model_chip_label(self.config.stt_model), self._tokens)),
+                    self._settings_row("Language", trailing=self._language_select()),
                     self._settings_row("Minimum seconds", trailing=self._field("dictation.min_record_seconds", f"{self.config.min_record_seconds:g}")),
                     self._settings_row("Minimum RMS", trailing=self._field("dictation.min_audio_rms", f"{self.config.min_audio_rms:g}")),
                 ],
             )
         )
-        body.addWidget(self._settings_block("Microphone", [self._settings_row("Input device", value="Default")]))
+        body.addWidget(self._settings_block("Microphone", [self._settings_row("Input device", trailing=self._language_select([("default", "Default")]))]))
         body.addWidget(self._settings_block("Cloud", [self._settings_row("Coming later", value="WIP")]))
         body.addStretch(1)
         scroll = QScrollArea()
@@ -1201,32 +1362,38 @@ class AppShell(QWidget):
         toggle.changed.connect(persist)
         return toggle
 
+    def _hotkey_row(self) -> HotkeyEditor:
+        editor = HotkeyEditor(self.config.hotkey, self._tokens)
+
+        def persist(hotkey: str) -> None:
+            set_config_value(self.config_path, "hotkeys.dictate_toggle", hotkey)
+            self.config = load_config(self.config_path)
+
+        editor.saved.connect(persist)
+        return editor
+
     def _segmented(self, names: list[str], current: str, on_pick) -> Segmented:
         control = Segmented(names, current, self._tokens)
         control.changed.connect(on_pick)
         return control
 
-    def _language_combo(self) -> QComboBox:
-        combo = QComboBox()
-        combo.setFocusPolicy(Qt.NoFocus)
-        combo.setFixedHeight(SEARCH_H)
-        combo.setMinimumWidth(118)
-        options = (("pt-en", "PT + EN"), ("pt", "Portuguese"), ("en", "English"), ("auto", "Auto"))
-        try:
-            mode = normalize_language_mode(self.config.stt_language)
-        except ValueError:
-            mode = "bilingual"
-        current = {"bilingual": "pt-en", "pt": "pt", "en": "en", "auto": "auto"}[mode]
-        for code, label in options:
-            combo.addItem(label, code)
-        combo.setCurrentIndex(next((i for i, item in enumerate(options) if item[0] == current), 0))
-        combo.currentIndexChanged.connect(lambda index: self._save_field("stt.language", str(combo.itemData(index))))
-        return combo
+    def _language_select(self, options: list[tuple[str, str]] | None = None) -> Select:
+        if options is None:
+            options = [("pt-en", "PT + EN"), ("pt", "Portuguese"), ("en", "English"), ("auto", "Auto")]
+            try:
+                mode = normalize_language_mode(self.config.stt_language)
+            except ValueError:
+                mode = "bilingual"
+            current = {"bilingual": "pt-en", "pt": "pt", "en": "en", "auto": "auto"}[mode]
+            control = Select(options, current, self._tokens)
+            control.changed.connect(lambda code: self._save_field("stt.language", code))
+            return control
+        return Select(options, options[0][0], self._tokens)
 
     def _field(self, key: str, value: str) -> QLineEdit:
         editor = QLineEdit(value)
-        editor.setFixedSize(88, SEARCH_H)
-        editor.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        editor.setFixedSize(110, SEARCH_H)
+        editor.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         editor.editingFinished.connect(lambda k=key, e=editor: self._save_field(k, e.text()))
         return editor
 

@@ -344,6 +344,25 @@ QPushButton#Segment:checked {{
 QPushButton#Segment:focus {{
   border: 1px solid transparent;
 }}
+QPushButton#Select {{
+  background: {tokens['surface']};
+  color: {tokens['text']};
+  border: 1px solid {tokens['border']};
+  border-radius: 5px;
+  text-align: left;
+  padding: 0 10px;
+  min-height: 34px;
+  max-height: 34px;
+  font-size: 12px;
+  font-weight: 500;
+}}
+QPushButton#Select:hover {{
+  background: {tokens['surface_hover']};
+  border-color: {tokens['border_hover']};
+}}
+QPushButton#Select:focus {{
+  border: 1px solid {tokens['accent']};
+}}
 QComboBox {{
   background: {tokens['surface']};
   color: {tokens['text']};
