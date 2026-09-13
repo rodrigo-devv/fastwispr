@@ -12,7 +12,7 @@ SUPPORTED_CONFIG_KEYS: dict[str, set[str]] = {
     "stt": {"provider", "model", "language", "device", "compute_type"},
     "dictation": {"min_record_seconds", "min_audio_rms"},
     "privacy": {"store_audio", "store_raw_transcripts"},
-    "injection": {"restore_clipboard"},
+    "injection": {"restore_clipboard", "save_to_clipboard"},
     "ui": {"theme"},
 }
 

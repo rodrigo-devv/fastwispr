@@ -143,9 +143,13 @@ def history_group_label(created_at: str, now: datetime | None = None) -> str:
     return stamp.strftime("%d %b %Y")
 
 
-def history_meta_line(created_at: str, duration_ms: int | None, now: datetime | None = None) -> str:
+def history_meta_line(created_at: str, duration_ms: int | None, now: datetime | None = None, *, include_group: bool = True) -> str:
+    clock = format_clock(created_at)
+    duration = format_duration_ms(duration_ms)
+    if not include_group:
+        return f"{clock} · {duration}"
     group = history_group_label(created_at, now)
-    return f"{group} · {format_clock(created_at)} · {format_duration_ms(duration_ms)}"
+    return f"{group} · {clock} · {duration}"
 
 
 def preset_label(stt_model: str) -> str:

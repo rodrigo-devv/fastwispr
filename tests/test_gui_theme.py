@@ -69,3 +69,4 @@ def test_history_grouping():
     assert history_group_label("2026-09-13 17:42:00", now) == "Today"
     assert history_group_label("2026-09-12 17:42:00", now) == "Yesterday"
     assert "13:42" in history_meta_line("2026-09-13 13:42:00", 4800, now)
+    assert history_meta_line("2026-09-13 13:42:00", 4800, now, include_group=False) == "13:42 · 4.8s"

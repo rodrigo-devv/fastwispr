@@ -24,6 +24,7 @@ class Config:
     store_audio: bool = False
     store_raw_transcripts: bool = False
     restore_clipboard: bool = True
+    save_to_clipboard: bool = True
     ui_theme: str = "dark"
 
 
@@ -102,5 +103,10 @@ def load_config(path: str | Path | None = None) -> Config:
             privacy.get("store_raw_transcripts", defaults.store_raw_transcripts),
         ),
         restore_clipboard=_read_bool("injection", "restore_clipboard", injection.get("restore_clipboard", defaults.restore_clipboard)),
+        save_to_clipboard=_read_bool(
+            "injection",
+            "save_to_clipboard",
+            injection.get("save_to_clipboard", defaults.save_to_clipboard),
+        ),
         ui_theme=str(ui.get("theme", defaults.ui_theme)).strip().lower() or defaults.ui_theme,
     )

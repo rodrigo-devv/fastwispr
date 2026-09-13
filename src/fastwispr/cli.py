@@ -373,6 +373,7 @@ def config_to_toml(config: Config) -> str:
             "",
             "[injection]",
             f"restore_clipboard = {bool_to_toml(config.restore_clipboard)}",
+            f"save_to_clipboard = {bool_to_toml(config.save_to_clipboard)}",
             "",
             "[ui]",
             f"theme = {quote_string(config.ui_theme)}",
@@ -410,7 +411,7 @@ def parse_config_value(section: str, option: str, raw_value: str) -> str | float
         "stt": {"provider", "model", "language", "device", "compute_type"},
         "dictation": {"min_record_seconds", "min_audio_rms"},
         "privacy": {"store_audio", "store_raw_transcripts"},
-        "injection": {"restore_clipboard"},
+        "injection": {"restore_clipboard", "save_to_clipboard"},
         "ui": {"theme"},
     }
     if option not in supported.get(section, set()):

@@ -36,3 +36,28 @@ def test_clipboard_keeps_transcript_when_paste_hotkey_fails(monkeypatch):
 
     assert pyperclip.value == "dictated text"
     assert pyperclip.copies == ["dictated text"]
+
+
+class OkPyAutoGui:
+    def hotkey(self, *keys):
+        return None
+
+
+def test_keep_clipboard_leaves_transcript_after_paste(monkeypatch):
+    pyperclip = FakePyperclip()
+    monkeypatch.setitem(sys.modules, "pyperclip", pyperclip)
+    monkeypatch.setitem(sys.modules, "pyautogui", OkPyAutoGui())
+    monkeypatch.setattr("time.sleep", lambda _seconds: None)
+    injector = ClipboardPasteInjector(keep_clipboard=True)
+    injector.paste_text("dictated text")
+    assert pyperclip.value == "dictated text"
+
+
+def test_keep_clipboard_off_restores_previous(monkeypatch):
+    pyperclip = FakePyperclip()
+    monkeypatch.setitem(sys.modules, "pyperclip", pyperclip)
+    monkeypatch.setitem(sys.modules, "pyautogui", OkPyAutoGui())
+    monkeypatch.setattr("time.sleep", lambda _seconds: None)
+    injector = ClipboardPasteInjector(keep_clipboard=False)
+    injector.paste_text("dictated text")
+    assert pyperclip.value == "previous"

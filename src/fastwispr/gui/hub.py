@@ -49,6 +49,7 @@ try:
         QPushButton,
         QRadioButton,
         QScrollArea,
+        QSizePolicy,
         QStackedWidget,
         QSystemTrayIcon,
         QVBoxLayout,
@@ -225,17 +226,55 @@ class StatusDot(QWidget):
         painter.end()
 
 
+class Toggle(QWidget):
+    changed = Signal(bool)
+
+    def __init__(self, on: bool, tokens: dict[str, str], parent=None):
+        super().__init__(parent)
+        self._on = on
+        self._tokens = tokens
+        self.setFixedSize(34, 18)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setFocusPolicy(Qt.NoFocus)
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802
+        if event.button() == Qt.LeftButton:
+            self._on = not self._on
+            self.changed.emit(self._on)
+            self.update()
+        super().mousePressEvent(event)
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        del event
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        track = QColor(self._tokens["accent"] if self._on else self._tokens["surface_hover"])
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(track)
+        painter.drawRoundedRect(0, 0, 34, 18, 9, 9)
+        knob_x = 17 if self._on else 2
+        painter.setBrush(QColor("#FFFFFF"))
+        painter.drawEllipse(knob_x, 2, 14, 14)
+        painter.end()
+
+
 class TranscriptRow(QFrame):
-    def __init__(self, event: DictationEvent, on_copy, on_open, tokens: dict[str, str] | None = None, on_delete=None, parent=None):
+    def __init__(self, event: DictationEvent, on_copy, on_open, tokens: dict[str, str] | None = None, on_delete=None, parent=None, include_group: bool = True):
         super().__init__(parent)
         palette = tokens or theme_tokens("dark")
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 8, 0, 8)
+        layout.setContentsMargins(0, 4, 0, 4)
+        layout.setSpacing(8)
         col = QVBoxLayout()
+        col.setSpacing(2)
+        col.setContentsMargins(0, 0, 0, 0)
         text = QLabel(event.final_text.replace("\n", " ")[:90])
         text.setWordWrap(True)
-        meta = QLabel(history_meta_line(event.created_at, event.audio_duration_ms))
+        text.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+        meta = QLabel(history_meta_line(event.created_at, event.audio_duration_ms, include_group=include_group))
         meta.setObjectName("Meta")
+        meta.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
         col.addWidget(text)
         col.addWidget(meta)
         layout.addLayout(col, 1)
@@ -669,8 +708,8 @@ class AppShell(QWidget):
         layout.addLayout(hint)
         chips = QHBoxLayout()
         chips.setSpacing(8)
-        chips.addWidget(self._chip("Model", model_chip_label(self.config.stt_model), lambda: self.show_page("speech")), 1)
-        chips.addWidget(self._chip("Microphone", "Default", lambda: self.show_page("microphone")), 1)
+        chips.addWidget(self._chip("Model", model_chip_label(self.config.stt_model), lambda: self.show_page("settings")), 1)
+        chips.addWidget(self._chip("Microphone", "Default", lambda: self.show_page("settings")), 1)
         layout.addLayout(chips)
         layout.addWidget(self._section_line())
         recent_head = QHBoxLayout()
@@ -736,6 +775,8 @@ class AppShell(QWidget):
         search.setFixedHeight(34)
         layout.addWidget(search)
         host = QVBoxLayout()
+        host.setSpacing(2)
+        host.setContentsMargins(0, 0, 0, 0)
         scroll_wrap = QWidget()
         scroll_wrap.setLayout(host)
         scroll = QScrollArea()
@@ -775,9 +816,11 @@ class AppShell(QWidget):
             for group, rows in grouped.items():
                 header = QLabel(group)
                 header.setStyleSheet("font-size:14px; font-weight:600;")
+                header.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
                 host.addWidget(header)
                 for event in rows:
-                    host.addWidget(TranscriptRow(event, self.copy_text, lambda ev: self.show_page("detail", ev), tokens=self._tokens, on_delete=self._delete_event))
+                    host.addWidget(TranscriptRow(event, self.copy_text, lambda ev: self.show_page("detail", ev), tokens=self._tokens, on_delete=self._delete_event, include_group=False))
+            host.addStretch(1)
 
         search.textChanged.connect(refresh)
         refresh()
@@ -931,25 +974,114 @@ class AppShell(QWidget):
 
     def _build_settings(self) -> None:
         layout = self._clear("settings")
-        rows = [
-            ("General", "general"),
-            ("Dictation", "dictation"),
-            ("Microphone", "microphone"),
-            ("Speech recognition", "speech"),
-            ("Privacy", "privacy"),
-            ("Shortcuts", "shortcuts"),
-            ("Appearance", "appearance"),
-            ("About", "about"),
-        ]
-        for label, page in rows:
-            btn = QPushButton(label)
-            btn.setIcon(QIcon(icon_pixmap("chevron-right", self._tokens["text_muted"], canvas=ICON_PX)))
-            btn.setIconSize(QSize(ICON_PX, ICON_PX))
-            btn.setLayoutDirection(Qt.RightToLeft)
-            btn.setFixedHeight(46)
-            btn.clicked.connect(lambda _=False, p=page: self.show_page(p))
-            layout.addWidget(btn)
-        layout.addStretch(1)
+        layout.setSpacing(16)
+        scroll_wrap = QWidget()
+        body = QVBoxLayout(scroll_wrap)
+        body.setContentsMargins(0, 0, 0, 0)
+        body.setSpacing(16)
+        body.addWidget(self._section_header("General"))
+        body.addLayout(self._labeled_row("Save to clipboard", self._clipboard_toggle()))
+        body.addWidget(QLabel("Theme"))
+        body.addLayout(self._theme_row())
+        body.addWidget(QLabel(f"Hotkey  {self.config.hotkey}"))
+        body.addWidget(self._section_header("Dictation"))
+        body.addWidget(QLabel("Preset"))
+        body.addLayout(self._preset_row())
+        body.addWidget(QLabel(f"Model  {model_chip_label(self.config.stt_model)}"))
+        body.addWidget(QLabel(f"Language  {self.config.stt_language}"))
+        body.addLayout(self._labeled_field("Minimum seconds", "dictation.min_record_seconds", f"{self.config.min_record_seconds:g}"))
+        body.addLayout(self._labeled_field("Minimum RMS", "dictation.min_audio_rms", f"{self.config.min_audio_rms:g}"))
+        body.addWidget(self._section_header("Microphone"))
+        body.addWidget(QLabel("Input device  Default"))
+        body.addWidget(self._section_header("Cloud"))
+        wip = QLabel("WIP — launching later.")
+        wip.setObjectName("Secondary")
+        body.addWidget(wip)
+        body.addStretch(1)
+        about = QPushButton("About")
+        about.clicked.connect(lambda: self.show_page("about"))
+        body.addWidget(about)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(scroll_wrap)
+        self._style_scroll(scroll, scroll_wrap)
+        layout.addWidget(scroll, 1)
+
+    def _section_header(self, title: str) -> QWidget:
+        wrap = QWidget()
+        row = QHBoxLayout(wrap)
+        row.setContentsMargins(0, 8, 0, 0)
+        row.setSpacing(8)
+        lbl = QLabel(title)
+        lbl.setStyleSheet("font-size:14px; font-weight:600;")
+        row.addWidget(lbl)
+        row.addWidget(self._section_line(), 1)
+        return wrap
+
+    def _labeled_row(self, label: str, widget: QWidget) -> QHBoxLayout:
+        row = QHBoxLayout()
+        row.addWidget(QLabel(label), 1)
+        row.addWidget(widget)
+        return row
+
+    def _clipboard_toggle(self) -> Toggle:
+        toggle = Toggle(self.config.save_to_clipboard, self._tokens)
+
+        def persist(on: bool) -> None:
+            set_config_value(self.config_path, "injection.save_to_clipboard", "true" if on else "false")
+            self.config = load_config(self.config_path)
+            if self.controller is not None:
+                setattr(self.controller.injector, "keep_clipboard", on)
+
+        toggle.changed.connect(persist)
+        return toggle
+
+    def _theme_row(self) -> QHBoxLayout:
+        row = QHBoxLayout()
+        for name in ("dark", "light", "system"):
+            btn = QPushButton(name.capitalize())
+            btn.setCheckable(True)
+            btn.setChecked(self.theme_preference == name)
+            if self.theme_preference == name:
+                btn.setObjectName("Primary")
+            btn.clicked.connect(lambda _=False, n=name: self.set_theme(n))
+            row.addWidget(btn)
+        return row
+
+    def _preset_row(self) -> QHBoxLayout:
+        row = QHBoxLayout()
+        current = stt_preset_from_values(
+            {
+                "stt.model": self.config.stt_model,
+                "stt.device": self.config.stt_device,
+                "stt.compute_type": self.config.stt_compute_type,
+            }
+        )
+        for name in ("Fast", "Balanced", "Accurate"):
+            btn = QPushButton(name)
+            btn.setCheckable(True)
+            btn.setChecked(current == name)
+            if current == name:
+                btn.setObjectName("Primary")
+            btn.clicked.connect(lambda _=False, n=name: self._apply_preset(n))
+            row.addWidget(btn)
+        return row
+
+    def _labeled_field(self, label: str, key: str, value: str) -> QHBoxLayout:
+        row = QHBoxLayout()
+        row.addWidget(QLabel(label), 1)
+        editor = QLineEdit(value)
+        editor.setFixedWidth(88)
+        editor.editingFinished.connect(lambda k=key, e=editor: self._save_field(k, e.text()))
+        row.addWidget(editor)
+        return row
+
+    def _save_field(self, key: str, value: str) -> None:
+        try:
+            set_config_value(self.config_path, key, value.strip())
+            self.config = load_config(self.config_path)
+        except Exception:
+            pass
 
     def _build_speech(self) -> None:
         layout = self._clear("speech")
@@ -998,7 +1130,7 @@ class AppShell(QWidget):
         for key in ("stt.model", "stt.device", "stt.compute_type"):
             set_config_value(self.config_path, key, values[key])
         self.config = load_config(self.config_path)
-        self.show_page("speech")
+        self.show_page("settings")
 
     def _build_privacy(self) -> None:
         layout = self._clear("privacy")
@@ -1022,7 +1154,19 @@ class AppShell(QWidget):
         layout.addStretch(1)
 
     def _build_about(self) -> None:
-        self._fill_info("about", ["FastWISPR 0.1.0", "Local-first dictation for Windows.", "MIT License"])
+        self._fill_info(
+            "about",
+            [
+                "FastWISPR 0.1.0",
+                "Local-first dictation for Windows.",
+                "MIT License",
+                "",
+                "Privacy",
+                "Audio retention is off by default.",
+                "Raw transcripts are off by default.",
+                "Speech recognition runs locally. No audio leaves the machine.",
+            ],
+        )
 
     def _fill_info(self, page: str, lines: list[str]) -> None:
         layout = self._clear(page)

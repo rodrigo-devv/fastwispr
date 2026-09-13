@@ -34,7 +34,7 @@ def run_qt_app(config: Config, *, config_path: Path | None = None, autostart: bo
             config.stt_compute_type,
             config.stt_language,
         ),
-        injector=ClipboardPasteInjector(restore_clipboard=config.restore_clipboard),
+        injector=ClipboardPasteInjector(restore_clipboard=config.restore_clipboard, keep_clipboard=config.save_to_clipboard),
         store=store,
         store_raw_transcripts=config.store_raw_transcripts,
         min_record_seconds=config.min_record_seconds,

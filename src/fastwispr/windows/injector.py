@@ -8,7 +8,7 @@ class PasteFailed(RuntimeError):
 
 
 class ClipboardPasteInjector:
-    def __init__(self, restore_clipboard: bool = True, paste_delay_seconds: float = 0.05):
+    def __init__(self, restore_clipboard: bool = True, paste_delay_seconds: float = 0.05, keep_clipboard: bool | None = None):
         try:
             import pyautogui
             import pyperclip
@@ -17,6 +17,7 @@ class ClipboardPasteInjector:
         self.pyautogui = pyautogui
         self.pyperclip = pyperclip
         self.restore_clipboard = restore_clipboard
+        self.keep_clipboard = keep_clipboard if keep_clipboard is not None else not restore_clipboard
         self.paste_delay_seconds = paste_delay_seconds
 
     def copy_text(self, text: str) -> None:
@@ -24,7 +25,7 @@ class ClipboardPasteInjector:
 
     def paste_text(self, text: str) -> None:
         previous = None
-        if self.restore_clipboard:
+        if not self.keep_clipboard:
             try:
                 previous = self.pyperclip.paste()
             except Exception:
@@ -37,5 +38,5 @@ class ClipboardPasteInjector:
         except Exception as exc:
             # Leave dictated text on the clipboard so Ctrl+V still works.
             raise PasteFailed(str(exc)) from exc
-        if self.restore_clipboard and previous is not None:
+        if not self.keep_clipboard and previous is not None:
             self.pyperclip.copy(previous)
