@@ -24,6 +24,7 @@ class Config:
     store_audio: bool = False
     store_raw_transcripts: bool = False
     restore_clipboard: bool = True
+    ui_theme: str = "dark"
 
 
 def default_data_dir() -> Path:
@@ -75,6 +76,7 @@ def load_config(path: str | Path | None = None) -> Config:
     dictation = _section(data, "dictation")
     privacy = _section(data, "privacy")
     injection = _section(data, "injection")
+    ui = _section(data, "ui")
 
     db_raw = storage.get("db_path")
     db_path = Path(db_raw).expanduser() if db_raw else default_data_dir() / "fastwispr.sqlite3"
@@ -100,4 +102,5 @@ def load_config(path: str | Path | None = None) -> Config:
             privacy.get("store_raw_transcripts", defaults.store_raw_transcripts),
         ),
         restore_clipboard=_read_bool("injection", "restore_clipboard", injection.get("restore_clipboard", defaults.restore_clipboard)),
+        ui_theme=str(ui.get("theme", defaults.ui_theme)).strip().lower() or defaults.ui_theme,
     )

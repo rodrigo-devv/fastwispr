@@ -34,11 +34,16 @@ class FakeResultStt:
 class FakeInjector:
     def __init__(self):
         self.pasted = ""
+        self.copied = ""
         self.calls = 0
+
+    def copy_text(self, text: str) -> None:
+        self.copied = text
 
     def paste_text(self, text: str) -> None:
         self.calls += 1
         self.pasted = text
+        self.copied = text
 
 
 def write_wav(path: Path, samples: list[int], sample_rate: int = 16000) -> Path:
@@ -182,3 +187,48 @@ def test_controller_logs_language_audio_and_latency_metrics(tmp_path: Path):
         assert row["audio_rms"] > 0.05
         assert row["audio_peak"] > 0.05
         assert row["skipped_reason"] is None
+
+
+class FailingInjector:
+    def __init__(self):
+        self.pasted = ""
+        self.copied = ""
+        self.calls = 0
+
+    def copy_text(self, text: str) -> None:
+        self.copied = text
+
+    def paste_text(self, text: str) -> None:
+        self.calls += 1
+        self.copied = text
+        raise RuntimeError("paste failed")
+
+
+def test_controller_keeps_history_when_paste_fails(tmp_path: Path):
+    injector = FailingInjector()
+    audio_path = write_wav(tmp_path / "voice.wav", [1000, -1000] * 8000)
+    with Store(tmp_path / "fastwispr.sqlite3") as store:
+        controller = DictationController(FakeRecorder(), FakeStt(), injector, store, min_record_seconds=0.0, min_audio_rms=0.0)
+
+        final = controller.finish_audio(audio_path)
+
+        assert final == "Meet at six."
+        assert controller.last_paste_ok is False
+        assert store.latest_completed_event().final_text == "Meet at six."
+        assert injector.copied == "Meet at six."
+
+
+def test_copy_last_and_retry_paste(tmp_path: Path):
+    injector = FakeInjector()
+    audio_path = write_wav(tmp_path / "voice.wav", [1000, -1000] * 8000)
+    with Store(tmp_path / "fastwispr.sqlite3") as store:
+        controller = DictationController(FakeRecorder(), FakeStt(), injector, store, min_record_seconds=0.0, min_audio_rms=0.0)
+        controller.finish_audio(audio_path)
+
+        copied = controller.copy_last_transcript()
+        retried = controller.retry_paste()
+
+        assert copied == "Meet at six."
+        assert retried == "Meet at six."
+        assert injector.calls == 2
+        assert injector.copied == "Meet at six."

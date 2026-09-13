@@ -90,6 +90,8 @@ class DictationEvent:
     audio_peak: float | None
     skipped_reason: str | None
     created_at: str
+    app_name: str | None = None
+    stt_model: str | None = None
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -104,6 +106,8 @@ class DictationEvent:
             "audio_peak": self.audio_peak,
             "skipped_reason": self.skipped_reason,
             "created_at": self.created_at,
+            "app_name": self.app_name,
+            "stt_model": self.stt_model,
         }
 
 
@@ -232,9 +236,9 @@ class Store:
         app_name: str | None = None,
         stt_model: str | None = None,
         polish_model: str | None = None,
-    ) -> None:
+    ) -> int:
         with self.lock:
-            self.conn.execute(
+            cursor = self.conn.execute(
                 """
                 INSERT INTO dictation_events(
                   app_name, raw_transcript, final_text, latency_ms, stt_latency_ms,
@@ -260,6 +264,55 @@ class Store:
                 ),
             )
             self.conn.commit()
+            return int(cursor.lastrowid or 0)
+
+    def get_dictation_event(self, event_id: int) -> DictationEvent | None:
+        with self.lock:
+            row = self.conn.execute(
+                f"{DICTATION_EVENT_SELECT} FROM dictation_events WHERE id = ?",
+                (event_id,),
+            ).fetchone()
+        return dictation_event_from_row(row) if row else None
+
+    def update_dictation_text(self, event_id: int, final_text: str) -> None:
+        with self.lock:
+            self.conn.execute(
+                "UPDATE dictation_events SET final_text = ? WHERE id = ?",
+                (final_text, event_id),
+            )
+            self.conn.commit()
+
+    def delete_dictation_event(self, event_id: int) -> int:
+        with self.lock:
+            cursor = self.conn.execute("DELETE FROM dictation_events WHERE id = ?", (event_id,))
+            self.conn.commit()
+        return cursor.rowcount
+
+    def latest_completed_event(self) -> DictationEvent | None:
+        with self.lock:
+            row = self.conn.execute(
+                f"""
+                {DICTATION_EVENT_SELECT}
+                FROM dictation_events
+                WHERE skipped_reason IS NULL AND trim(final_text) != ''
+                ORDER BY id DESC
+                LIMIT 1
+                """
+            ).fetchone()
+        return dictation_event_from_row(row) if row else None
+
+    def list_snippets(self) -> list[Snippet]:
+        with self.lock:
+            rows = self.conn.execute(
+                "SELECT cue, body, app_scope FROM snippets ORDER BY cue"
+            ).fetchall()
+        return [Snippet(row["cue"], row["body"], row["app_scope"]) for row in rows]
+
+    def delete_snippet(self, cue: str) -> int:
+        with self.lock:
+            cursor = self.conn.execute("DELETE FROM snippets WHERE cue = ?", (cue.strip(),))
+            self.conn.commit()
+        return cursor.rowcount
 
     def recent_dictation_events(
         self,
@@ -267,6 +320,8 @@ class Store:
         *,
         skipped_only: bool = False,
         language: str | None = None,
+        query: str | None = None,
+        transcripts_only: bool = False,
     ) -> list[DictationEvent]:
         where = []
         params: list[object] = []
@@ -275,13 +330,17 @@ class Store:
         if language:
             where.append("language = ?")
             params.append(language)
+        if query:
+            where.append("final_text LIKE ?")
+            params.append(f"%{query}%")
+        if transcripts_only:
+            where.append("skipped_reason IS NULL AND trim(final_text) != ''")
         where_sql = " WHERE " + " AND ".join(where) if where else ""
         params.append(max(1, limit))
         with self.lock:
             rows = self.conn.execute(
                 f"""
-                SELECT id, final_text, latency_ms, stt_latency_ms, audio_duration_ms,
-                       language, language_probability, audio_rms, audio_peak, skipped_reason, created_at
+                {DICTATION_EVENT_SELECT}
                 FROM dictation_events
                 {where_sql}
                 ORDER BY id DESC
@@ -292,7 +351,15 @@ class Store:
         return [dictation_event_from_row(row) for row in rows]
 
 
+DICTATION_EVENT_SELECT = """
+                SELECT id, final_text, latency_ms, stt_latency_ms, audio_duration_ms,
+                       language, language_probability, audio_rms, audio_peak, skipped_reason,
+                       created_at, app_name, stt_model
+"""
+
+
 def dictation_event_from_row(row: sqlite3.Row | dict[str, Any]) -> DictationEvent:
+    keys = row.keys()
     return DictationEvent(
         id=int(row["id"]),
         final_text=row["final_text"] or "",
@@ -305,6 +372,8 @@ def dictation_event_from_row(row: sqlite3.Row | dict[str, Any]) -> DictationEven
         audio_peak=row["audio_peak"],
         skipped_reason=row["skipped_reason"],
         created_at=row["created_at"],
+        app_name=row["app_name"] if "app_name" in keys else None,
+        stt_model=row["stt_model"] if "stt_model" in keys else None,
     )
 
 

@@ -44,12 +44,15 @@ class HoldToTalkDictationApp:
         self.processing = False
         self.shutting_down = False
 
-    def run(self) -> None:
+    def start(self) -> None:
         self.overlay.root.after(25, self._drain_events)
         if self.activation_mode == "toggle":
             self.listener.start(lambda: self.post(self.toggle_recording), lambda: None)
         else:
             self.listener.start(lambda: self.post(self.start_recording), lambda: self.post(self.stop_recording))
+
+    def run(self) -> None:
+        self.start()
         try:
             self.overlay.run()
         finally:
@@ -147,10 +150,12 @@ class HoldToTalkDictationApp:
             if self.audio_path is None:
                 return
             final = self.controller.finish_audio(self.audio_path, started=self.record_started_at or time.monotonic())
-            if final.strip():
+            if final.strip() and getattr(self.controller, "last_paste_ok", True):
                 self.post(lambda: self._show_pasted(final))
+            elif final.strip():
+                self.post(lambda: self.overlay.set_state("error"))
             else:
-                self.post(self.overlay.hide)
+                self.post(lambda: self.overlay.set_state("error"))
         except Exception as exc:  # pragma: no cover - hardware/STT path
             print(f"Dictation failed: {exc}")
             self.post(lambda: self.overlay.set_state("error"))

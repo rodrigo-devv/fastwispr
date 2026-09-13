@@ -152,7 +152,7 @@ def test_toggle_mode_starts_and_stops_on_mouse_down(monkeypatch):
     assert app.recording is False
 
 
-def test_skipped_empty_dictation_hides_overlay_without_paste_state(monkeypatch):
+def test_skipped_empty_dictation_shows_error_without_paste_state(monkeypatch):
     monkeypatch.setattr(hold_to_talk, "play_recording_started", lambda **kwargs: None)
     monkeypatch.setattr(hold_to_talk, "play_recording_stopped", lambda: None)
     overlay = FakeOverlay()
@@ -163,5 +163,5 @@ def test_skipped_empty_dictation_hides_overlay_without_paste_state(monkeypatch):
     wait_for_finish(app)
     app._drain_events()
 
-    assert overlay.hidden is True
+    assert "error" in overlay.states
     assert "pasting" not in overlay.states

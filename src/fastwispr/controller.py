@@ -44,6 +44,8 @@ class DictationController:
         self.store_raw_transcripts = store_raw_transcripts
         self.min_record_seconds = min_record_seconds
         self.min_audio_rms = min_audio_rms
+        self.last_paste_ok = True
+        self.last_event_id: int | None = None
 
     def dictate_once(self, seconds: float = 5.0, app_name: str | None = None) -> str:
         started = time.monotonic()
@@ -70,12 +72,13 @@ class DictationController:
         raw = result.text
         final = process_text_with_store(raw, self.store, app_name).final
         if not final.strip():
+            self.last_paste_ok = False
             self._record_skipped_event("empty_transcript", stats, app_name, started, stt_latency_ms=stt_latency_ms)
             return ""
 
-        self.injector.paste_text(final)
         latency_ms = int((time.monotonic() - started) * 1000)
-        self.store.record_dictation_event(
+        # Persist first so a paste failure never loses the transcript.
+        self.last_event_id = self.store.record_dictation_event(
             raw_transcript=raw if self.store_raw_transcripts else None,
             final_text=final,
             latency_ms=latency_ms,
@@ -88,7 +91,38 @@ class DictationController:
             app_name=app_name,
             stt_model=getattr(self.transcriber, "model_name", None),
         )
+        try:
+            self.injector.paste_text(final)
+            self.last_paste_ok = True
+        except Exception:
+            self.last_paste_ok = False
         return final
+
+    def last_completed_text(self) -> str:
+        event = self.store.latest_completed_event()
+        return event.final_text if event else ""
+
+    def copy_last_transcript(self) -> str:
+        text = self.last_completed_text()
+        if not text:
+            return ""
+        copy_text = getattr(self.injector, "copy_text", None)
+        if callable(copy_text):
+            copy_text(text)
+        else:
+            self.injector.paste_text(text)
+        return text
+
+    def retry_paste(self, text: str | None = None) -> str:
+        payload = text if text is not None else self.last_completed_text()
+        if not payload:
+            return ""
+        try:
+            self.injector.paste_text(payload)
+            self.last_paste_ok = True
+        except Exception:
+            self.last_paste_ok = False
+        return payload
 
     def _transcribe(self, audio_path: str | Path) -> TranscriptionResult:
         transcribe_result = getattr(self.transcriber, "transcribe_result", None)

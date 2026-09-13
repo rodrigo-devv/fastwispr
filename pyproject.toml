@@ -19,7 +19,8 @@ Repository = "https://github.com/rodrigo-devv/fastwispr"
 
 [project.optional-dependencies]
 stt = ["faster-whisper>=1.0"]
-windows = ["keyboard>=0.13", "sounddevice>=0.4", "pyperclip>=1.8", "pyautogui>=0.9", "pystray>=0.19"]
+windows = ["keyboard>=0.13", "sounddevice>=0.4", "pyperclip>=1.8", "pyautogui>=0.9", "pystray>=0.19", "PySide6>=6.6"]
+gui = ["PySide6>=6.6"]
 packaging = ["pyinstaller>=6"]
 test = ["pytest>=8"]
 

@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from fastwispr.windows.injector import ClipboardPasteInjector
+from fastwispr.windows.injector import ClipboardPasteInjector, PasteFailed
 
 
 class FakePyperclip:
@@ -24,15 +24,15 @@ class FailingPyAutoGui:
         raise RuntimeError("paste failed")
 
 
-def test_clipboard_is_restored_when_paste_hotkey_fails(monkeypatch):
+def test_clipboard_keeps_transcript_when_paste_hotkey_fails(monkeypatch):
     pyperclip = FakePyperclip()
     monkeypatch.setitem(sys.modules, "pyperclip", pyperclip)
     monkeypatch.setitem(sys.modules, "pyautogui", FailingPyAutoGui())
     monkeypatch.setattr("time.sleep", lambda _seconds: None)
     injector = ClipboardPasteInjector(restore_clipboard=True)
 
-    with pytest.raises(RuntimeError, match="paste failed"):
+    with pytest.raises(PasteFailed, match="paste failed"):
         injector.paste_text("dictated text")
 
-    assert pyperclip.value == "previous"
-    assert pyperclip.copies == ["dictated text", "previous"]
+    assert pyperclip.value == "dictated text"
+    assert pyperclip.copies == ["dictated text"]

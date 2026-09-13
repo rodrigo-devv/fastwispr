@@ -232,12 +232,20 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     if args.command == "run-windows-tray":
-        from .windows.tray import run_tray
+        def launch_tray() -> None:
+            try:
+                from .gui.app import run_qt_app
+
+                run_qt_app(config, config_path=resolve_config_path(args.config), autostart=not args.no_autostart)
+            except (ImportError, RuntimeError):
+                from .windows.tray import run_tray
+
+                run_tray(resolve_config_path(args.config), autostart=not args.no_autostart)
 
         return run_with_single_instance(
             APP_MUTEX_NAME,
             APP_ALREADY_RUNNING_MESSAGE,
-            lambda: run_tray(resolve_config_path(args.config), autostart=not args.no_autostart),
+            launch_tray,
         )
 
     parser.print_help()
@@ -365,6 +373,9 @@ def config_to_toml(config: Config) -> str:
             "",
             "[injection]",
             f"restore_clipboard = {bool_to_toml(config.restore_clipboard)}",
+            "",
+            "[ui]",
+            f"theme = {quote_string(config.ui_theme)}",
         ]
     )
 
@@ -400,6 +411,7 @@ def parse_config_value(section: str, option: str, raw_value: str) -> str | float
         "dictation": {"min_record_seconds", "min_audio_rms"},
         "privacy": {"store_audio", "store_raw_transcripts"},
         "injection": {"restore_clipboard"},
+        "ui": {"theme"},
     }
     if option not in supported.get(section, set()):
         raise SystemExit(f"Unsupported config key: {section}.{option}")
