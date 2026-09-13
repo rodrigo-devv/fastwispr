@@ -194,6 +194,7 @@ class PageBar(QWidget):
         if on_add is not None:
             add = QPushButton("Add")
             add.setObjectName("Primary")
+            add.setFixedHeight(32)
             add.clicked.connect(on_add)
             layout.addWidget(add)
 
@@ -1006,8 +1007,11 @@ class AppShell(QWidget):
                 add = self._add_dictionary
             elif name == "snippets":
                 add = self._add_snippet
-            back_to = "history" if name == "detail" else "settings" if name not in {"history", "dictionary", "snippets", "settings"} else "home"
-            if name in {"history", "dictionary", "snippets", "settings"}:
+            if name == "detail":
+                back_to = "history"
+            elif name in {"dictionary", "snippets", "about"}:
+                back_to = "settings"
+            else:
                 back_to = "home"
             self.page_bar_layout.addWidget(PageBar(titles[name], lambda: self.show_page(back_to), add, tokens=self._tokens))
             self.page_bar_host.show()
@@ -1180,19 +1184,9 @@ class AppShell(QWidget):
         layout.addStretch(1)
         layout.addWidget(self._section_line())
         footer = QHBoxLayout()
-        history = QPushButton(" History")
-        history.setFixedHeight(FOOTER_H)
-        history.setIcon(QIcon(icon_pixmap("clock", self._tokens["text_secondary"], canvas=FOOTER_H)))
-        history.setIconSize(QSize(ICON_PX, ICON_PX))
-        history.clicked.connect(lambda: self.show_page("history"))
-        settings = QPushButton(" Settings")
-        settings.setObjectName("Primary")
-        settings.setFixedHeight(FOOTER_H)
-        settings.setIcon(QIcon(icon_pixmap("settings", "#FFFFFF", canvas=FOOTER_H)))
-        settings.setIconSize(QSize(ICON_PX, ICON_PX))
-        settings.clicked.connect(lambda: self.show_page("settings"))
-        footer.addWidget(history)
-        footer.addWidget(settings)
+        footer.setSpacing(8)
+        footer.addWidget(self._footer_button("History", "clock", lambda: self.show_page("history"), primary=False), 1)
+        footer.addWidget(self._footer_button("Settings", "settings", lambda: self.show_page("settings"), primary=True), 1)
         layout.addLayout(footer)
 
     def _chip(self, caption: str, value: str, on_click) -> QFrame:
@@ -1326,8 +1320,12 @@ class AppShell(QWidget):
         layout = self._clear("dictionary")
         search = QLineEdit()
         search.setPlaceholderText("Search")
+        search.setFixedHeight(SEARCH_H)
+        search.addAction(QIcon(icon_pixmap("search", self._tokens["text_muted"], canvas=SEARCH_H)), QLineEdit.ActionPosition.LeadingPosition)
         layout.addWidget(search)
         host = QVBoxLayout()
+        host.setSpacing(0)
+        host.setContentsMargins(0, 0, 0, 0)
         wrap = QWidget()
         wrap.setLayout(host)
         scroll = QScrollArea()
@@ -1343,18 +1341,28 @@ class AppShell(QWidget):
                 if child is not None:
                     child.deleteLater()
             needle = text.strip().lower()
-            for entry in self.store.dictionary_entries():
-                if needle and needle not in entry.term.lower() and needle not in entry.replacement.lower():
-                    continue
-                row = QHBoxLayout()
-                row.addWidget(QLabel(f"{entry.term}  →  {entry.replacement}"), 1)
-                delete = QPushButton("Delete")
-                delete.setObjectName("Ghost")
-                delete.clicked.connect(lambda _=False, term=entry.term: (self.store.delete_dictionary(term), refresh(search.text())))
-                row.addWidget(delete)
-                frame = QWidget()
-                frame.setLayout(row)
-                host.addWidget(frame)
+            rows = [entry for entry in self.store.dictionary_entries() if not needle or needle in entry.term.lower() or needle in entry.replacement.lower()]
+            for index, entry in enumerate(rows):
+                row = QWidget()
+                row.setFixedHeight(ROW_H)
+                line = QHBoxLayout(row)
+                line.setContentsMargins(0, 0, 0, 0)
+                spoken = QLabel(entry.term)
+                written = QLabel(entry.replacement)
+                written.setObjectName("SettingsValue")
+                written.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                trash = QPushButton()
+                trash.setObjectName("CopyBtn")
+                trash.setIcon(QIcon(icon_pixmap("trash", self._tokens["text_muted"])))
+                trash.setIconSize(QSize(ICON_PX, ICON_PX))
+                trash.clicked.connect(lambda _=False, term=entry.term: (self.store.delete_dictionary(term), refresh(search.text())))
+                line.addWidget(spoken, 1)
+                line.addWidget(written)
+                line.addWidget(trash)
+                host.addWidget(row)
+                if index < len(rows) - 1:
+                    host.addWidget(self._section_line())
+            host.addStretch(1)
 
         search.textChanged.connect(refresh)
         refresh()
@@ -1379,24 +1387,42 @@ class AppShell(QWidget):
 
     def _build_snippets(self) -> None:
         layout = self._clear("snippets")
-        for snippet in self.store.list_snippets():
-            row = QHBoxLayout()
+        host = QVBoxLayout()
+        host.setSpacing(0)
+        wrap = QWidget()
+        wrap.setLayout(host)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(wrap)
+        self._style_scroll(scroll, wrap)
+        layout.addWidget(scroll, 1)
+        snippets = self.store.list_snippets()
+        for index, snippet in enumerate(snippets):
+            row = QWidget()
+            row.setMinimumHeight(ROW_H)
+            row.setCursor(Qt.PointingHandCursor)
+            box = QHBoxLayout(row)
+            box.setContentsMargins(0, 8, 0, 8)
             col = QVBoxLayout()
-            col.addWidget(QLabel(snippet.cue))
-            preview = QLabel(snippet.body.splitlines()[0][:48] if snippet.body else "")
+            col.setSpacing(2)
+            name = QLabel(snippet.cue)
+            name.setStyleSheet("font-size:13px; font-weight:600;")
+            preview = QLabel(snippet.body.splitlines()[0][:64] if snippet.body else "")
             preview.setObjectName("Secondary")
+            col.addWidget(name)
             col.addWidget(preview)
-            row.addLayout(col, 1)
-            edit = QPushButton("Edit")
-            edit.clicked.connect(lambda _=False, sn=snippet: self._edit_snippet(sn.cue, sn.body))
-            delete = QPushButton("Delete")
-            delete.clicked.connect(lambda _=False, cue=snippet.cue: (self.store.delete_snippet(cue), self.show_page("snippets")))
-            row.addWidget(edit)
-            row.addWidget(delete)
-            frame = QWidget()
-            frame.setLayout(row)
-            layout.addWidget(frame)
-        layout.addStretch(1)
+            box.addLayout(col, 1)
+            trash = QPushButton()
+            trash.setObjectName("CopyBtn")
+            trash.setIcon(QIcon(icon_pixmap("trash", self._tokens["text_muted"])))
+            trash.setIconSize(QSize(ICON_PX, ICON_PX))
+            trash.clicked.connect(lambda _=False, cue=snippet.cue: (self.store.delete_snippet(cue), self.show_page("snippets")))
+            box.addWidget(trash, 0, Qt.AlignVCenter)
+            row.mousePressEvent = lambda ev, sn=snippet: self._edit_snippet(sn.cue, sn.body) if ev.button() == Qt.LeftButton else None  # type: ignore[method-assign]
+            host.addWidget(row)
+            if index < len(snippets) - 1:
+                host.addWidget(self._section_line())
+        host.addStretch(1)
 
     def _add_snippet(self) -> None:
         self._edit_snippet("", "")
@@ -1474,6 +1500,7 @@ class AppShell(QWidget):
         )
         body.addWidget(self._settings_block("Microphone", [self._settings_row("Input device", trailing=self._language_select([("default", "Default")]), tip="Microphone used for dictation.")]))
         body.addWidget(self._settings_block("Cloud", [self._settings_row("Coming later", value="WIP", tip="Cloud dictation is not available yet.")]))
+        body.addWidget(self._about_button())
         body.addStretch(1)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -1483,9 +1510,11 @@ class AppShell(QWidget):
         footer = QWidget()
         footer.setAttribute(Qt.WA_StyledBackground, True)
         footer.setStyleSheet(f"background-color: {self._tokens['bg']};")
-        foot = QVBoxLayout(footer)
+        foot = QHBoxLayout(footer)
         foot.setContentsMargins(0, 12, 0, 12)
-        foot.addWidget(self._about_button())
+        foot.setSpacing(8)
+        foot.addWidget(self._footer_button("Dictionary", "book", lambda: self.show_page("dictionary"), primary=False), 1)
+        foot.addWidget(self._footer_button("Snippets", "quote", lambda: self.show_page("snippets"), primary=True), 1)
         layout.addWidget(footer)
 
     def _section_header(self, title: str) -> QWidget:
@@ -1537,6 +1566,17 @@ class AppShell(QWidget):
         btn.setLayoutDirection(Qt.RightToLeft)
         btn.setFocusPolicy(Qt.NoFocus)
         btn.clicked.connect(lambda: self.show_page("about"))
+        return btn
+
+    def _footer_button(self, label: str, icon: str, on_click, *, primary: bool) -> QPushButton:
+        btn = QPushButton(f" {label}")
+        btn.setObjectName("FooterPrimary" if primary else "FooterGhost")
+        btn.setFixedHeight(FOOTER_H)
+        color = "#FFFFFF" if primary else self._tokens["text"]
+        btn.setIcon(QIcon(icon_pixmap(icon, color, canvas=FOOTER_H)))
+        btn.setIconSize(QSize(ICON_PX, ICON_PX))
+        btn.setFocusPolicy(Qt.NoFocus)
+        btn.clicked.connect(on_click)
         return btn
 
     def _clipboard_toggle(self) -> Toggle:

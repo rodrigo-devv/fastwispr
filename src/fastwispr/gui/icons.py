@@ -16,6 +16,8 @@ ICON_NAMES = (
     "search",
     "check",
     "settings",
+    "book",
+    "quote",
     "mic",
     "trash",
 )
@@ -90,12 +92,24 @@ def _stroke(painter, name: str) -> None:
         painter.drawLine(10, 17, 19, 7)
     elif name == "settings":
         painter.drawEllipse(9, 9, 6, 6)
-        for angle in (0, 45, 90, 135, 180, 225, 270, 315):
+        for angle in range(0, 360, 60):
             painter.save()
             painter.translate(12, 12)
             painter.rotate(angle)
-            painter.drawLine(0, -10, 0, -7)
+            painter.drawRoundedRect(-2.1, -11.2, 4.2, 5.2, 1.1, 1.1)
             painter.restore()
+    elif name == "book":
+        painter.drawRoundedRect(4, 3, 16, 18, 2, 2)
+        painter.drawLine(12, 3, 12, 21)
+        painter.drawLine(7, 8, 10, 8)
+        painter.drawLine(14, 8, 17, 8)
+    elif name == "quote":
+        painter.drawRoundedRect(4, 6, 7, 8, 1.5, 1.5)
+        painter.drawLine(4, 14, 4, 18)
+        painter.drawLine(4, 18, 8, 14)
+        painter.drawRoundedRect(13, 6, 7, 8, 1.5, 1.5)
+        painter.drawLine(13, 14, 13, 18)
+        painter.drawLine(13, 18, 17, 14)
     elif name == "mic":
         painter.drawRoundedRect(9, 3, 6, 11, 3, 3)
         painter.drawArc(7, 11, 10, 9, 0, -180 * 16)

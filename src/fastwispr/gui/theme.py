@@ -9,7 +9,7 @@ HUB_INSET_RIGHT = 20
 HUB_INSET_BOTTOM = 16
 TITLEBAR_H = 52
 PAGEBAR_H = 44
-FOOTER_H = 34
+FOOTER_H = 40
 OVERLAY_H = 38
 OVERLAY_MIN_W = 140
 OVERLAY_TOP = 24
@@ -265,6 +265,34 @@ QPushButton#SaveMini:disabled {{
   background: {tokens['surface']};
   color: {tokens['text_muted']};
   border: 1px solid {tokens['border']};
+}}
+QPushButton#FooterGhost {{
+  background: {tokens['surface']};
+  color: {tokens['text']};
+  border: 1px solid {tokens['border']};
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 500;
+  min-height: {FOOTER_H}px;
+  max-height: {FOOTER_H}px;
+  padding: 0 14px;
+}}
+QPushButton#FooterGhost:hover {{
+  background: {tokens['surface_hover']};
+}}
+QPushButton#FooterPrimary {{
+  background: {tokens['accent']};
+  color: #FFFFFF;
+  border: 1px solid {tokens['accent']};
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  min-height: {FOOTER_H}px;
+  max-height: {FOOTER_H}px;
+  padding: 0 14px;
+}}
+QPushButton#FooterPrimary:hover {{
+  background: {tokens['accent_hover']};
 }}
 QPushButton#Ghost {{
   background: transparent;
