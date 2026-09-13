@@ -15,6 +15,7 @@ from fastwispr.gui.theme import (
     overlay_enter_pos,
     overlay_rest_pos,
     resolve_theme_name,
+    theme_tokens,
 )
 
 
@@ -41,7 +42,21 @@ def test_home_copy_uses_real_model_and_ctrl_space():
     assert hotkey_keycaps("ctrl+space") == ["Ctrl", "Space"]
 
 
-def test_theme_system_follows_os():
+def test_lucide_icon_catalog_covers_chrome():
+    from fastwispr.gui.icons import ICON_NAMES
+
+    for name in ("sun", "moon", "minus", "x", "copy", "chevron-left", "chevron-right"):
+        assert name in ICON_NAMES
+
+
+def test_light_theme_keeps_same_geometry_tokens():
+    dark = theme_tokens("dark")
+    light = theme_tokens("light")
+    assert dark["bg"] == "#090A0B"
+    assert light["bg"] == "#FFFFFF"
+    assert dark["accent"].startswith("#")
+    assert light["accent"].startswith("#")
+    assert "surface_2" in dark and "border_hover" in light
     assert resolve_theme_name("system", system_is_dark=True) == "dark"
     assert resolve_theme_name("system", system_is_dark=False) == "light"
     assert resolve_theme_name("light") == "light"

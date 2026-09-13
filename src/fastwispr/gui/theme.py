@@ -24,8 +24,10 @@ THEMES = {
     "dark": {
         "bg": "#090A0B",
         "surface": "#111315",
+        "surface_2": "#17191C",
         "surface_hover": "#1D2024",
         "border": "#272A2E",
+        "border_hover": "#363A40",
         "text": "#F5F5F5",
         "text_secondary": "#A1A1AA",
         "text_muted": "#71717A",
@@ -39,8 +41,10 @@ THEMES = {
     "light": {
         "bg": "#FFFFFF",
         "surface": "#F7F7F7",
+        "surface_2": "#F0F0F0",
         "surface_hover": "#EAEAEA",
         "border": "#E2E2E2",
+        "border_hover": "#D2D2D2",
         "text": "#111111",
         "text_secondary": "#5F6368",
         "text_muted": "#858585",
@@ -139,13 +143,20 @@ QWidget#AppShell {{
   color: {tokens['text']};
   border: 1px solid {tokens['border']};
   border-radius: 9px;
+  font-family: "Segoe UI", sans-serif;
 }}
-QWidget#TitleBar, QWidget#PageBar {{
+QWidget#TitleBar {{
   background: {tokens['bg']};
+  border-bottom: 1px solid {tokens['border']};
+}}
+QWidget#PageBar {{
+  background: {tokens['bg']};
+  border-bottom: 1px solid {tokens['border']};
 }}
 QLabel {{
   color: {tokens['text']};
   font-size: 13px;
+  font-family: "Segoe UI", sans-serif;
 }}
 QLabel#WordmarkFast {{
   color: {tokens['text']};
@@ -169,37 +180,79 @@ QLabel#Hint {{
   color: {tokens['text_secondary']};
   font-size: 13px;
 }}
+QFrame#ChromeDivider {{
+  background: {tokens['border']};
+  border: none;
+  max-width: 1px;
+}}
 QPushButton {{
   background: {tokens['surface']};
   color: {tokens['text']};
   border: 1px solid {tokens['border']};
   border-radius: 5px;
   font-size: 12px;
-  padding: 6px 10px;
+  font-weight: 500;
+  padding: 0 14px;
+  min-height: 34px;
+  font-family: "Segoe UI", sans-serif;
 }}
 QPushButton:hover {{
   background: {tokens['surface_hover']};
+  border-color: {tokens['border_hover']};
 }}
 QPushButton:focus {{
-  border: 2px solid {tokens['accent']};
+  border: 1px solid {tokens['accent']};
 }}
 QPushButton#Primary {{
   background: {tokens['accent']};
   color: #FFFFFF;
   border: 1px solid {tokens['accent']};
+  font-weight: 600;
 }}
 QPushButton#Primary:hover {{
   background: {tokens['accent_hover']};
 }}
 QPushButton#Ghost {{
   background: transparent;
-  border: none;
+  color: {tokens['text_secondary']};
+  border: 1px solid transparent;
   border-radius: 5px;
+}}
+QPushButton#Ghost:hover {{
+  background: {tokens['surface_hover']};
+  color: {tokens['text']};
+}}
+QPushButton#IconBtn {{
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  padding: 0px;
+  min-height: 32px;
+  max-height: 32px;
+  min-width: 32px;
+  max-width: 32px;
+}}
+QPushButton#IconBtn:hover {{
+  background: {tokens['surface_hover']};
 }}
 QPushButton#CaptionBtn {{
   background: transparent;
   border: none;
   border-radius: 0px;
+  padding: 0px;
+  min-width: 40px;
+  max-width: 40px;
+  min-height: 52px;
+  max-height: 52px;
+}}
+QPushButton#CaptionBtn:hover {{
+  background: {tokens['surface_hover']};
+}}
+QPushButton#CaptionClose {{
+  background: transparent;
+  border: none;
+  border-radius: 0px;
+  padding: 0px;
   min-width: 40px;
   max-width: 40px;
   min-height: 52px;
@@ -209,23 +262,42 @@ QPushButton#CaptionClose:hover {{
   background: {tokens['accent_soft']};
 }}
 QPushButton#CopyBtn {{
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
   min-width: 28px;
   max-width: 28px;
   min-height: 28px;
   max-height: 28px;
   padding: 0px;
 }}
+QPushButton#CopyBtn:hover {{
+  background: {tokens['surface_hover']};
+}}
+QPushButton#Chip {{
+  background: {tokens['surface']};
+  border: 1px solid {tokens['border']};
+  border-radius: 5px;
+  text-align: left;
+  padding: 0 12px;
+  min-height: 46px;
+}}
+QPushButton#Chip:hover {{
+  background: {tokens['surface_hover']};
+  border-color: {tokens['border_hover']};
+}}
 QLineEdit, QPlainTextEdit {{
   background: {tokens['surface']};
   color: {tokens['text']};
   border: 1px solid {tokens['border']};
   border-radius: 5px;
-  padding: 6px 10px;
+  padding: 0 10px;
   font-size: 13px;
   min-height: {SEARCH_H}px;
+  font-family: "Segoe UI", sans-serif;
 }}
 QLineEdit:focus, QPlainTextEdit:focus {{
-  border: 2px solid {tokens['accent']};
+  border: 1px solid {tokens['accent']};
 }}
 QFrame#Card, QFrame#Chip, QFrame#Keycap {{
   background: {tokens['surface']};
@@ -238,15 +310,16 @@ QFrame#TranscriptPanel {{
   border-radius: 7px;
 }}
 QMenu {{
-  background: {tokens['bg']};
+  background: {tokens['surface']};
   color: {tokens['text']};
   border: 1px solid {tokens['border']};
   border-radius: 7px;
   padding: 4px;
+  font-size: 12px;
 }}
 QMenu::item {{
   height: 30px;
-  padding: 4px 12px;
+  padding: 0 9px;
   border-radius: 4px;
 }}
 QMenu::item:selected {{

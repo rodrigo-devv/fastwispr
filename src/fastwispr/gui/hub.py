@@ -27,11 +27,13 @@ from .theme import (
     model_chip_label,
     preset_label,
     theme_tokens,
+    resolve_theme_name,
 )
 
 try:
-    from PySide6.QtCore import QPoint, Qt, QTimer
-    from PySide6.QtGui import QColor, QCursor, QGuiApplication, QIcon, QPainter, QPixmap
+    from PySide6.QtCore import QPoint, QSize, Qt, QTimer
+    from PySide6.QtGui import QColor, QCursor, QFont, QGuiApplication, QIcon, QPainter, QPixmap
+    from .icons import icon_pixmap
     from PySide6.QtWidgets import (
         QApplication,
         QButtonGroup,
@@ -76,34 +78,55 @@ class TitleBar(QWidget):
         self.setObjectName("TitleBar")
         self.setFixedHeight(TITLEBAR_H)
         self._drag: QPoint | None = None
+        self.theme_btn = QPushButton()
+        self.theme_btn.setObjectName("IconBtn")
+        self.theme_btn.setFixedSize(32, 32)
+        self.theme_btn.setToolTip("Theme")
+        self.theme_btn.clicked.connect(on_theme)
+        self.minimize_btn = QPushButton()
+        self.minimize_btn.setObjectName("CaptionBtn")
+        self.minimize_btn.setToolTip("Minimize")
+        self.minimize_btn.clicked.connect(on_min)
+        self.close_btn = QPushButton()
+        self.close_btn.setObjectName("CaptionClose")
+        self.close_btn.setToolTip("Close")
+        self.close_btn.clicked.connect(on_close)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(16, 0, 0, 0)
         layout.setSpacing(0)
+        brand = QFont("Segoe UI")
+        brand.setPixelSize(14)
+        brand.setWeight(QFont.DemiBold)
+        brand.setLetterSpacing(QFont.PercentageSpacing, 98)
         fast = QLabel("Fast")
         fast.setObjectName("WordmarkFast")
+        fast.setFont(brand)
         wispr = QLabel("WISPR")
         wispr.setObjectName("WordmarkWispr")
+        wispr.setFont(brand)
         layout.addWidget(fast)
         layout.addWidget(wispr)
         layout.addStretch(1)
-        self.theme_btn = QPushButton("◐")
-        self.theme_btn.setObjectName("Ghost")
-        self.theme_btn.setFixedSize(32, 32)
-        self.theme_btn.clicked.connect(on_theme)
         layout.addWidget(self.theme_btn)
+        spacer = QWidget()
+        spacer.setFixedWidth(8)
+        layout.addWidget(spacer)
         divider = QFrame()
+        divider.setObjectName("ChromeDivider")
         divider.setFixedSize(1, 16)
-        divider.setStyleSheet("background:#272A2E;")
         layout.addWidget(divider)
-        minimize = QPushButton("–")
-        minimize.setObjectName("CaptionBtn")
-        minimize.clicked.connect(on_min)
-        close = QPushButton("×")
-        close.setObjectName("CaptionBtn")
-        close.setProperty("id", "close")
-        close.clicked.connect(on_close)
-        layout.addWidget(minimize)
-        layout.addWidget(close)
+        layout.addWidget(self.minimize_btn)
+        layout.addWidget(self.close_btn)
+
+    def recolor(self, tokens: dict[str, str], resolved_theme: str) -> None:
+        # Dark UI shows a sun (switch to light); light UI shows a moon.
+        theme_icon = "sun" if resolved_theme == "dark" else "moon"
+        self.theme_btn.setIcon(QIcon(icon_pixmap(theme_icon, tokens["text_secondary"], size=15, canvas=32)))
+        self.theme_btn.setIconSize(QSize(15, 15))
+        self.minimize_btn.setIcon(QIcon(icon_pixmap("minus", tokens["text_secondary"], size=15, canvas=40)))
+        self.minimize_btn.setIconSize(QSize(15, 15))
+        self.close_btn.setIcon(QIcon(icon_pixmap("x", tokens["accent"], size=15, canvas=40)))
+        self.close_btn.setIconSize(QSize(15, 15))
 
     def mousePressEvent(self, event) -> None:  # noqa: N802
         if event.button() == Qt.LeftButton:
@@ -124,14 +147,19 @@ class TitleBar(QWidget):
 
 
 class PageBar(QWidget):
-    def __init__(self, title: str, on_back, on_add=None, parent=None):
+    def __init__(self, title: str, on_back, on_add=None, tokens: dict[str, str] | None = None, parent=None):
         super().__init__(parent)
         self.setObjectName("PageBar")
         self.setFixedHeight(PAGEBAR_H)
+        palette = tokens or theme_tokens("dark")
         layout = QHBoxLayout(self)
         layout.setContentsMargins(12, 0, 12, 0)
-        back = QPushButton("‹")
-        back.setObjectName("Ghost")
+        back = QPushButton()
+        back.setObjectName("IconBtn")
+        back.setFixedSize(32, 32)
+        back.setToolTip("Back")
+        back.setIcon(QIcon(icon_pixmap("chevron-left", palette["text_secondary"], size=15, canvas=32)))
+        back.setIconSize(QSize(15, 15))
         back.clicked.connect(on_back)
         title_lbl = QLabel(title)
         title_lbl.setStyleSheet("font-size:14px; font-weight:600;")
@@ -157,23 +185,46 @@ class Keycap(QFrame):
         layout.addWidget(label)
 
 
-class TranscriptRow(QFrame):
-    def __init__(self, event: DictationEvent, on_copy, on_open, parent=None):
+class StatusDot(QWidget):
+    def __init__(self, color: str, parent=None):
         super().__init__(parent)
+        self._color = color
+        self.setFixedSize(6, 6)
+
+    def set_color(self, color: str) -> None:
+        self._color = color
+        self.update()
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        del event
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor(self._color))
+        painter.drawEllipse(0, 0, 6, 6)
+        painter.end()
+
+
+class TranscriptRow(QFrame):
+    def __init__(self, event: DictationEvent, on_copy, on_open, tokens: dict[str, str] | None = None, parent=None):
+        super().__init__(parent)
+        palette = tokens or theme_tokens("dark")
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 8, 0, 8)
         col = QVBoxLayout()
-        text = QLabel(event.final_text.replace("\n", " ")[:90] or "⚠ Transcription failed")
+        text = QLabel(event.final_text.replace("\n", " ")[:90] or "Transcription failed")
         text.setWordWrap(True)
         meta = QLabel(history_meta_line(event.created_at, event.audio_duration_ms))
         meta.setObjectName("Meta")
         col.addWidget(text)
         col.addWidget(meta)
         layout.addLayout(col, 1)
-        copy_btn = QPushButton("⧉")
+        copy_btn = QPushButton()
         copy_btn.setObjectName("CopyBtn")
         copy_btn.setFixedSize(COPY_BTN, COPY_BTN)
         copy_btn.setToolTip("Copy")
+        copy_btn.setIcon(QIcon(icon_pixmap("copy", palette["text_secondary"], size=15, canvas=28)))
+        copy_btn.setIconSize(QSize(15, 15))
         copy_btn.clicked.connect(lambda: on_copy(event.final_text))
         layout.addWidget(copy_btn, 0, Qt.AlignTop)
         self.mousePressEvent = lambda ev: on_open(event) if ev.button() == Qt.LeftButton else None  # type: ignore[method-assign]
@@ -185,7 +236,7 @@ class Toast(QWidget):
         self.setAttribute(Qt.WA_ShowWithoutActivating)
         self.setFixedSize(* (280, 40))
         layout = QHBoxLayout(self)
-        self.label = QLabel("✓ Copied")
+        self.label = QLabel("Copied")
         layout.addWidget(self.label)
         self._hide = QTimer(self)
         self._hide.setSingleShot(True)
@@ -236,6 +287,9 @@ class AppShell(QWidget):
         self.controller = controller
         self.overlay = overlay
         self.theme_preference = config.ui_theme
+        self._tokens = theme_tokens(config.ui_theme)
+        self._page = "home"
+        self._ready = False
         self.status = "Ready"
         self._detail: DictationEvent | None = None
         self.setObjectName("AppShell")
@@ -260,6 +314,7 @@ class AppShell(QWidget):
         self.toast = Toast()
         self.paste_card = PasteFailedCard(self.copy_last, self.retry_last)
         self.apply_theme()
+        self._ready = True
         self.show_page("home")
 
     def place_on_tray_screen(self) -> None:
@@ -277,9 +332,14 @@ class AppShell(QWidget):
             except Exception:
                 system_dark = True
         tokens = theme_tokens(self.theme_preference, system_dark)
+        self._tokens = tokens
         self.setStyleSheet(app_qss(tokens))
+        resolved = resolve_theme_name(self.theme_preference, system_dark)
+        self.titlebar.recolor(tokens, resolved)
         if self.overlay is not None and hasattr(self.overlay, "set_theme_preference"):
             self.overlay.set_theme_preference(self.theme_preference)
+        if self._ready:
+            self.show_page(self._page, self._detail)
 
     def _cycle_theme(self) -> None:
         order = ["dark", "light", "system"]
@@ -294,6 +354,7 @@ class AppShell(QWidget):
 
     def show_page(self, name: str, event: DictationEvent | None = None) -> None:
         self._detail = event
+        self._page = name
         builders = {
             "home": self._build_home,
             "history": self._build_history,
@@ -349,7 +410,7 @@ class AppShell(QWidget):
             back_to = "history" if name == "detail" else "settings" if name not in {"history", "dictionary", "snippets", "settings"} else "home"
             if name in {"history", "dictionary", "snippets", "settings"}:
                 back_to = "home"
-            self.page_bar_layout.addWidget(PageBar(titles[name], lambda: self.show_page(back_to), add))
+            self.page_bar_layout.addWidget(PageBar(titles[name], lambda: self.show_page(back_to), add, tokens=self._tokens))
             self.page_bar_host.show()
         else:
             self.page_bar_host.hide()
@@ -377,7 +438,7 @@ class AppShell(QWidget):
                 QApplication.clipboard().setText(text)
         else:
             QApplication.clipboard().setText(text)
-        self.toast.show_message("✓ Copied", self)
+        self.toast.show_message("Copied", self)
 
     def copy_last(self) -> None:
         text = self.controller.copy_last_transcript() if self.controller is not None else ""
@@ -387,7 +448,7 @@ class AppShell(QWidget):
             if text:
                 self.copy_text(text)
             return
-        self.toast.show_message("✓ Copied", self)
+        self.toast.show_message("Copied", self)
 
     def retry_last(self) -> None:
         if self.controller is not None:
@@ -410,13 +471,12 @@ class AppShell(QWidget):
         layout = self._clear("home")
         layout.addStretch(1)
         status_row = QHBoxLayout()
+        status_row.setSpacing(8)
         status_row.addStretch(1)
-        dot = QLabel("●")
-        color = {"Ready": "#71717A", "Recording": "#E10600", "Processing": "#F59E0B", "Error": "#EF4444"}.get(self.status, "#71717A")
-        dot.setStyleSheet(f"color:{color}; font-size:14px;")
+        color = {"Ready": self._tokens["text_muted"], "Recording": self._tokens["accent"], "Processing": self._tokens["warning"], "Error": self._tokens["error"]}.get(self.status, self._tokens["text_muted"])
+        status_row.addWidget(StatusDot(color), 0, Qt.AlignVCenter)
         label = QLabel(self.status)
         label.setObjectName("StatusLabel")
-        status_row.addWidget(dot)
         status_row.addWidget(label)
         status_row.addStretch(1)
         layout.addLayout(status_row)
@@ -445,7 +505,7 @@ class AppShell(QWidget):
             empty.setObjectName("Secondary")
             layout.addWidget(empty)
         for event in events:
-            layout.addWidget(TranscriptRow(event, self.copy_text, lambda ev: self.show_page("detail", ev)))
+            layout.addWidget(TranscriptRow(event, self.copy_text, lambda ev: self.show_page("detail", ev), tokens=self._tokens))
         layout.addStretch(1)
         footer = QHBoxLayout()
         history = QPushButton("History")
@@ -460,8 +520,12 @@ class AppShell(QWidget):
         layout.addLayout(footer)
 
     def _chip(self, text: str, on_click) -> QPushButton:
-        btn = QPushButton(f"{text}   ›")
+        btn = QPushButton(text)
+        btn.setObjectName("Chip")
         btn.setFixedHeight(CHIP_H)
+        btn.setIcon(QIcon(icon_pixmap("chevron-right", self._tokens["text_muted"], size=15, canvas=16)))
+        btn.setIconSize(QSize(15, 15))
+        btn.setLayoutDirection(Qt.RightToLeft)
         btn.clicked.connect(on_click)
         return btn
 
@@ -490,17 +554,29 @@ class AppShell(QWidget):
             for event in events:
                 grouped.setdefault(history_group_label(event.created_at), []).append(event)
             if not events:
-                empty = QLabel("No transcriptions yet.\nHold Ctrl+Space and start speaking.")
+                empty_wrap = QVBoxLayout()
+                clock = QLabel()
+                clock.setPixmap(icon_pixmap("clock", self._tokens["text_muted"], size=22, canvas=22))
+                clock.setAlignment(Qt.AlignCenter)
+                empty = QLabel("No transcriptions yet")
                 empty.setObjectName("Secondary")
                 empty.setAlignment(Qt.AlignCenter)
-                host.addWidget(empty)
+                hint = QLabel("Hold Ctrl+Space and start speaking.")
+                hint.setObjectName("Secondary")
+                hint.setAlignment(Qt.AlignCenter)
+                empty_wrap.addWidget(clock)
+                empty_wrap.addWidget(empty)
+                empty_wrap.addWidget(hint)
+                box = QWidget()
+                box.setLayout(empty_wrap)
+                host.addWidget(box)
                 return
             for group, rows in grouped.items():
                 header = QLabel(group)
                 header.setStyleSheet("font-size:14px; font-weight:600;")
                 host.addWidget(header)
                 for event in rows:
-                    host.addWidget(TranscriptRow(event, self.copy_text, lambda ev: self.show_page("detail", ev)))
+                    host.addWidget(TranscriptRow(event, self.copy_text, lambda ev: self.show_page("detail", ev), tokens=self._tokens))
 
         search.textChanged.connect(refresh)
         refresh()
@@ -661,7 +737,10 @@ class AppShell(QWidget):
             ("About", "about"),
         ]
         for label, page in rows:
-            btn = QPushButton(f"{label}   ›")
+            btn = QPushButton(label)
+            btn.setIcon(QIcon(icon_pixmap("chevron-right", self._tokens["text_muted"], size=15, canvas=16)))
+            btn.setIconSize(QSize(15, 15))
+            btn.setLayoutDirection(Qt.RightToLeft)
             btn.setFixedHeight(46)
             btn.clicked.connect(lambda _=False, p=page: self.show_page(p))
             layout.addWidget(btn)
@@ -768,7 +847,7 @@ class AppShell(QWidget):
             for key, editor in editors.items():
                 set_config_value(self.config_path, key, editor.text().strip())
             self.config = load_config(self.config_path)
-            self.toast.show_message("✓ Saved", self)
+            self.toast.show_message("Saved", self)
 
         save.clicked.connect(persist)
         layout.addWidget(save)
