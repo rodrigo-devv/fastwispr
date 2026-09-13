@@ -30,10 +30,11 @@ def test_hub_geometry_contract():
 
 def test_overlay_motion_contract():
     assert OVERLAY_H == 38
-    assert overlay_rest_pos(1920, 168) == ((1920 - 168) // 2, 24)
-    start = overlay_enter_pos(1920, 168)
+    rest = overlay_rest_pos(1920, 1040, 176, 38)
+    assert rest == (1920 - 176 - HUB_INSET_RIGHT, 1040 - 38 - HUB_INSET_BOTTOM)
+    start = overlay_enter_pos(1920, 1040, 176, 38)
     assert start[0] > 1920
-    assert start[1] == 24
+    assert start[1] == rest[1]
 
 
 def test_home_copy_uses_real_model_and_ctrl_space():

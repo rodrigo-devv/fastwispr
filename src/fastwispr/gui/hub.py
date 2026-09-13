@@ -286,6 +286,69 @@ class PasteFailedCard(QWidget):
         box.addLayout(row)
 
 
+class CloseDialog(QDialog):
+    """Same chrome as the hub: rounded, dark, compact. No stock QMessageBox."""
+
+    MINIMIZE = 1
+    QUIT = 2
+    CANCEL = 0
+
+    def __init__(self, tokens: dict[str, str], parent=None):
+        super().__init__(parent)
+        self.choice = self.CANCEL
+        self._tokens = tokens
+        self.setModal(True)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.setFixedSize(320, 188)
+        self.setStyleSheet(app_qss(tokens))
+        root = QVBoxLayout(self)
+        root.setContentsMargins(20, 18, 20, 16)
+        root.setSpacing(12)
+        title = QLabel("Close FastWISPR?")
+        title.setStyleSheet("font-size:14px; font-weight:600;")
+        body = QLabel("Minimize keeps dictation on the taskbar.\nQuit stops the app completely.")
+        body.setObjectName("Secondary")
+        body.setWordWrap(True)
+        root.addWidget(title)
+        root.addWidget(body)
+        root.addStretch(1)
+        row = QHBoxLayout()
+        cancel = QPushButton("Cancel")
+        cancel.setObjectName("Ghost")
+        cancel.clicked.connect(self.reject)
+        minimize = QPushButton("Minimize")
+        minimize.clicked.connect(self._minimize)
+        quit_btn = QPushButton("Quit")
+        quit_btn.setObjectName("Primary")
+        quit_btn.clicked.connect(self._quit)
+        row.addWidget(cancel)
+        row.addStretch(1)
+        row.addWidget(minimize)
+        row.addWidget(quit_btn)
+        root.addLayout(row)
+
+    def _minimize(self) -> None:
+        self.choice = self.MINIMIZE
+        self.accept()
+
+    def _quit(self) -> None:
+        self.choice = self.QUIT
+        self.accept()
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        del event
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        path = QPainterPath()
+        path.addRoundedRect(rect, 9, 9)
+        painter.fillPath(path, QColor(self._tokens["bg"]))
+        painter.setPen(QPen(QColor(self._tokens["border"]), 1))
+        painter.drawPath(path)
+        painter.end()
+
+
 class AppShell(QWidget):
     def __init__(
         self,
@@ -391,7 +454,7 @@ class AppShell(QWidget):
             "dictation": lambda: self._build_simple("dictation", [("dictation.min_record_seconds", "Minimum seconds"), ("dictation.min_audio_rms", "Minimum RMS"), ("injection.restore_clipboard", "Restore clipboard")]),
             "shortcuts": lambda: self._fill_info("shortcuts", [f"Dictate  {self.config.hotkey}", "Copy last  Shift+Alt+Z"]),
             "microphone": lambda: self._fill_info("microphone", ["Input device  Default"]),
-            "general": lambda: self._build_simple("general", [("activation.trigger", "Trigger"), ("activation.mode", "Mode")]),
+            "general": lambda: self._fill_info("general", ["Press Ctrl+Space to start dictation, press again to stop.", "Toggle is the only mode."]),
         }
         widget = self.pages[name]
         _wipe_layout(widget.layout())
@@ -472,18 +535,11 @@ class AppShell(QWidget):
         self.paste_card.show()
 
     def confirm_close(self) -> None:
-        box = QMessageBox(self)
-        box.setWindowTitle("FastWISPR")
-        box.setText("Close FastWISPR?")
-        box.setInformativeText("Minimize keeps dictation on the taskbar. Quit stops the app.")
-        minimize = box.addButton("Minimize to taskbar", QMessageBox.ButtonRole.AcceptRole)
-        quit_btn = box.addButton("Quit", QMessageBox.ButtonRole.DestructiveRole)
-        box.addButton("Cancel", QMessageBox.ButtonRole.RejectRole)
-        box.exec()
-        clicked = box.clickedButton()
-        if clicked is minimize:
+        dialog = CloseDialog(self._tokens, self)
+        dialog.exec()
+        if dialog.choice == CloseDialog.MINIMIZE:
             self.showMinimized()
-        elif clicked is quit_btn:
+        elif dialog.choice == CloseDialog.QUIT:
             QApplication.quit()
 
     def closeEvent(self, event) -> None:  # noqa: N802
@@ -540,9 +596,9 @@ class AppShell(QWidget):
         layout.addLayout(status_row)
         hint = QHBoxLayout()
         hint.addStretch(1)
-        hold = QLabel("Hold")
-        hold.setObjectName("Hint")
-        hint.addWidget(hold)
+        press = QLabel("Press")
+        press.setObjectName("Hint")
+        hint.addWidget(press)
         for cap in hotkey_keycaps(self.config.hotkey):
             hint.addWidget(Keycap(cap))
         rest = QLabel("to dictate")

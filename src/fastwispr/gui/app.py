@@ -11,7 +11,6 @@ from ..windows.audio import SounddeviceRecorder
 from ..windows.hotkeys import KeyboardHotkeyListener
 from ..windows.hold_to_talk import HoldToTalkDictationApp
 from ..windows.injector import ClipboardPasteInjector
-from ..windows.mouse_buttons import XButtonHoldListener
 from .hub import AppShell, attach_tray
 from .overlay import QtRecordingOverlay
 
@@ -51,24 +50,26 @@ def run_qt_app(config: Config, *, config_path: Path | None = None, autostart: bo
 
     overlay.set_error_handler(open_history)
 
-    if config.activation_trigger == "keyboard":
-        listener = KeyboardHotkeyListener(config.hotkey)
-    elif config.activation_trigger == "mouse":
-        listener = XButtonHoldListener(config.hold_button)
-    else:
-        raise RuntimeError("activation.trigger must be keyboard or mouse")
+    def retry_from_pill() -> None:
+        if controller.last_completed_text():
+            controller.retry_paste()
+        else:
+            open_history()
 
+    overlay.set_retry_handler(retry_from_pill)
+
+    listener = KeyboardHotkeyListener(config.hotkey)
     dictation = HoldToTalkDictationApp(
         controller=controller,
         recorder=recorder,
         overlay=overlay,
         listener=listener,
-        activation_mode=config.activation_mode,
+        activation_mode="toggle",
     )
     paused = {"value": False}
 
     def start_recording() -> None:
-        dictation.post(dictation.toggle_recording if config.activation_mode == "toggle" else dictation.start_recording)
+        dictation.post(dictation.toggle_recording)
 
     def pause_hotkeys() -> None:
         if paused["value"]:

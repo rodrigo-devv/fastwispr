@@ -79,12 +79,29 @@ def hub_top_left(avail_right: int, avail_bottom: int, width: int, height: int) -
     return (avail_right - width - HUB_INSET_RIGHT, avail_bottom - height - HUB_INSET_BOTTOM)
 
 
-def overlay_enter_pos(screen_right: int, pill_width: int, top: int = OVERLAY_TOP) -> tuple[int, int]:
-    return (screen_right + pill_width + 24, top)
+def overlay_rest_pos(
+    avail_right: int,
+    avail_bottom: int,
+    pill_width: int,
+    pill_height: int = OVERLAY_H,
+) -> tuple[int, int]:
+    # Bottom-right, 20px from the right edge, 16px above the taskbar.
+    return (
+        avail_right - pill_width - HUB_INSET_RIGHT,
+        avail_bottom - pill_height - HUB_INSET_BOTTOM,
+    )
 
 
-def overlay_rest_pos(screen_width: int, pill_width: int, top: int = OVERLAY_TOP) -> tuple[int, int]:
-    return ((screen_width - pill_width) // 2, top)
+def overlay_enter_pos(
+    avail_right: int,
+    avail_bottom: int,
+    pill_width: int,
+    pill_height: int = OVERLAY_H,
+) -> tuple[int, int]:
+    # Fully outside the right edge, same baseline as rest.
+    _x, y = overlay_rest_pos(avail_right, avail_bottom, pill_width, pill_height)
+    del _x
+    return (avail_right + pill_width + 24, y)
 
 
 def model_chip_label(stt_model: str) -> str:
