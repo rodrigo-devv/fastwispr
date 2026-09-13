@@ -36,7 +36,7 @@ from .theme import (
 try:
     from PySide6.QtCore import Property, QEasingCurve, QEvent, QPoint, QPropertyAnimation, QRectF, QSize, Qt, QTimer, Signal
     from PySide6.QtGui import QColor, QCursor, QFont, QGuiApplication, QIcon, QKeySequence, QPainter, QPainterPath, QPainterPathStroker, QPalette, QPen, QPixmap, QRegion
-    from .icons import ICON_PX, icon_pixmap
+    from .icons import FOOTER_ICON_PX, ICON_PX, icon_pixmap
     from PySide6.QtWidgets import (
         QApplication,
         QButtonGroup,
@@ -101,9 +101,9 @@ class ThemeSwitch(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._dark = True
-        self._gx = 28.0
+        self._gx = 32.0
         self._tokens = theme_tokens("dark")
-        self.setFixedSize(46, 20)
+        self.setFixedSize(52, 22)
         self.setCursor(Qt.PointingHandCursor)
         self.setFocusPolicy(Qt.NoFocus)
         self.setToolTip("Theme")
@@ -123,7 +123,7 @@ class ThemeSwitch(QWidget):
     def set_dark(self, dark: bool, tokens: dict[str, str]) -> None:
         self._tokens = tokens
         self._dark = dark
-        target = 28.0 if dark else 2.0
+        target = 32.0 if dark else 2.0
         if self.isVisible() and abs(self._gx - target) > 0.5:
             self._anim.stop()
             self._anim.setStartValue(self._gx)
@@ -143,17 +143,20 @@ class ThemeSwitch(QWidget):
         painter.setRenderHint(QPainter.Antialiasing)
         track = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
         path = QPainterPath()
-        path.addRoundedRect(track, 5, 5)
-        fill = QColor(self._tokens["surface_hover"] if self._dark else self._tokens["border"])
+        path.addRoundedRect(track, 6, 6)
+        fill = QColor("#3A3A3A" if self._dark else "#CECECE")
         painter.fillPath(path, fill)
-        moon = icon_pixmap("moon", self._tokens["text_muted"] if self._dark else self._tokens["text"], size=12, canvas=12)
-        sun = icon_pixmap("sun", self._tokens["text_muted"] if not self._dark else self._tokens["text"], size=12, canvas=12)
-        painter.drawPixmap(4, 4, moon)
-        painter.drawPixmap(30, 4, sun)
-        knob = QRectF(self._gx, 2, 16, 16)
+        painter.setPen(QPen(QColor(self._tokens["border"]), 1))
+        painter.drawPath(path)
+        moon = icon_pixmap("moon", "#F2F2F2" if self._dark else "#3A3A3A", size=12, canvas=12)
+        sun = icon_pixmap("sun", "#CECECE" if self._dark else "#3A3A3A", size=12, canvas=12)
+        painter.drawPixmap(5, 5, moon)
+        painter.drawPixmap(35, 5, sun)
+        knob = QRectF(self._gx, 2, 18, 18)
         blob = QPainterPath()
-        blob.addRoundedRect(knob, 4, 4)
-        painter.fillPath(blob, QColor("#212121" if self._dark else "#F2F2F2"))
+        blob.addRoundedRect(knob, 5, 5)
+        painter.setPen(Qt.NoPen)
+        painter.fillPath(blob, QColor("#F5F5F5" if self._dark else "#212121"))
         painter.end()
 
 
@@ -1719,8 +1722,8 @@ class AppShell(QWidget):
             color = self._tokens["text"]
         btn.setObjectName(name)
         btn.setFixedHeight(FOOTER_H)
-        btn.setIcon(QIcon(icon_pixmap(icon, color, canvas=ICON_PX)))
-        btn.setIconSize(QSize(ICON_PX, ICON_PX))
+        btn.setIcon(QIcon(icon_pixmap(icon, color, size=FOOTER_ICON_PX, canvas=FOOTER_ICON_PX)))
+        btn.setIconSize(QSize(FOOTER_ICON_PX, FOOTER_ICON_PX))
         btn.setFocusPolicy(Qt.NoFocus)
         btn.clicked.connect(on_click)
         return btn

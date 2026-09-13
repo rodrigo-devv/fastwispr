@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-# Lucide-style 24x24 stroke icons. Painted at 18px. No emoji.
+# Lucide-style 24x24 stroke icons. Painted at 22px. Footer actions stay 18px.
 
-ICON_PX = 18
+ICON_PX = 22
+FOOTER_ICON_PX = 18
 ICON_NAMES = (
     "sun",
     "moon",
@@ -26,7 +27,7 @@ ICON_NAMES = (
 def icon_pixmap(name: str, color: str, *, size: int = ICON_PX, canvas: int | None = None):
     """Stroke-draw a Lucide icon. Import Qt only when called."""
     from PySide6.QtCore import Qt
-    from PySide6.QtGui import QColor, QPainter, QPen, QPixmap
+    from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen, QPixmap
 
     if name not in ICON_NAMES:
         raise ValueError(f"Unknown icon: {name}")
@@ -48,6 +49,9 @@ def icon_pixmap(name: str, color: str, *, size: int = ICON_PX, canvas: int | Non
 
 
 def _stroke(painter, name: str) -> None:
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QPainterPath
+
     if name == "x":
         painter.drawLine(18, 6, 6, 18)
         painter.drawLine(6, 6, 18, 18)
@@ -79,7 +83,14 @@ def _stroke(painter, name: str) -> None:
         painter.drawLine(4.9, 19.1, 6.3, 17.7)
         painter.drawLine(17.7, 6.3, 19.1, 4.9)
     elif name == "moon":
-        painter.drawArc(6, 4, 14, 16, 50 * 16, 260 * 16)
+        body = QPainterPath()
+        body.addEllipse(5, 3, 15, 18)
+        hole = QPainterPath()
+        hole.addEllipse(10, 1, 15, 16)
+        painter.setBrush(painter.pen().color())
+        painter.setPen(Qt.NoPen)
+        painter.drawPath(body.subtracted(hole))
+        painter.setBrush(Qt.NoBrush)
     elif name == "clock":
         painter.drawEllipse(3, 3, 18, 18)
         painter.drawLine(12, 7, 12, 12)

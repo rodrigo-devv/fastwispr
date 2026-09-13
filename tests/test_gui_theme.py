@@ -48,7 +48,7 @@ def test_lucide_icon_catalog_covers_chrome():
 
     for name in ("sun", "moon", "minus", "x", "copy", "chevron-left", "chevron-right", "chevron-down", "settings", "book", "quote", "mic", "trash"):
         assert name in ICON_NAMES
-    assert ICON_PX == 18
+    assert ICON_PX == 22
 
 
 def test_light_theme_keeps_same_geometry_tokens():
