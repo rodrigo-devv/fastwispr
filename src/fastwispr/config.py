@@ -26,6 +26,7 @@ class Config:
     restore_clipboard: bool = True
     save_to_clipboard: bool = True
     ui_theme: str = "dark"
+    input_device: str = ""
 
 
 def default_data_dir() -> Path:
@@ -78,6 +79,7 @@ def load_config(path: str | Path | None = None) -> Config:
     privacy = _section(data, "privacy")
     injection = _section(data, "injection")
     ui = _section(data, "ui")
+    audio = _section(data, "audio")
 
     db_raw = storage.get("db_path")
     db_path = Path(db_raw).expanduser() if db_raw else default_data_dir() / "fastwispr.sqlite3"
@@ -109,4 +111,5 @@ def load_config(path: str | Path | None = None) -> Config:
             injection.get("save_to_clipboard", defaults.save_to_clipboard),
         ),
         ui_theme=str(ui.get("theme", defaults.ui_theme)).strip().lower() or defaults.ui_theme,
+        input_device=str(audio.get("input_device", defaults.input_device)).strip(),
     )

@@ -269,6 +269,24 @@ QPushButton#SaveMini:disabled {{
   color: {tokens['text_muted']};
   border: 1px solid {tokens['border']};
 }}
+QPushButton#QuietMini {{
+  background: {tokens['surface']};
+  color: {tokens['text']};
+  border: 1px solid {tokens['border']};
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 0 10px;
+  min-height: 28px;
+  max-height: 28px;
+  min-width: 72px;
+}}
+QPushButton#QuietMini:hover {{
+  background: {tokens['surface_hover']};
+}}
+QPushButton#QuietMini:pressed {{
+  padding-top: 1px;
+}}
 QPushButton#FooterGhost {{
   background: {tokens['surface']};
   color: {tokens['text']};

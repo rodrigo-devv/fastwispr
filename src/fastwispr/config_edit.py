@@ -14,9 +14,10 @@ SUPPORTED_CONFIG_KEYS: dict[str, set[str]] = {
     "privacy": {"store_audio", "store_raw_transcripts"},
     "injection": {"restore_clipboard", "save_to_clipboard"},
     "ui": {"theme"},
+    "audio": {"input_device"},
 }
 
-CONFIG_SECTION_ORDER = ["storage", "hotkeys", "activation", "stt", "dictation", "privacy", "injection", "ui"]
+CONFIG_SECTION_ORDER = ["storage", "hotkeys", "activation", "stt", "dictation", "privacy", "injection", "ui", "audio"]
 
 
 def set_config_value(path: Path, key: str, raw_value: str) -> None:

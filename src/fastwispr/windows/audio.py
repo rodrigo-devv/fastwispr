@@ -22,8 +22,25 @@ def int16_rms_level(data: bytes) -> float:
     return min(1.0, math.sqrt(total / sample_count) / 32767.0)
 
 
+def list_input_devices(sd_module: Any | None = None) -> list[str]:
+    try:
+        sd = sd_module or __import__("sounddevice")
+        names: list[str] = []
+        seen: set[str] = set()
+        for item in sd.query_devices():
+            if int(item.get("max_input_channels") or 0) <= 0:
+                continue
+            name = str(item.get("name") or "").strip()
+            if name and name not in seen:
+                seen.add(name)
+                names.append(name)
+        return names
+    except Exception:
+        return []
+
+
 class SounddeviceRecorder:
-    def __init__(self, sample_rate: int = 16000, channels: int = 1, sd_module: Any | None = None):
+    def __init__(self, sample_rate: int = 16000, channels: int = 1, sd_module: Any | None = None, device: str | None = None):
         if sd_module is None:
             try:
                 sd_module = __import__("sounddevice")
@@ -32,6 +49,7 @@ class SounddeviceRecorder:
         self.sd: Any = sd_module
         self.sample_rate = sample_rate
         self.channels = channels
+        self.device = device or None
 
     def record_seconds(self, output_path: str | Path, seconds: float) -> Path:
         stop_event = Event()
@@ -78,6 +96,7 @@ class SounddeviceRecorder:
             channels=self.channels,
             dtype="int16",
             callback=callback,
+            device=self.device,
         ):
             if stop_after_delay is not None:
                 stop_after_delay()

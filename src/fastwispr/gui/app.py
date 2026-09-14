@@ -24,7 +24,7 @@ def run_qt_app(config: Config, *, config_path: Path | None = None, autostart: bo
     """Run hub + overlay + dictation in one Qt process. STT stays off the GUI thread."""
     app = QApplication.instance() or QApplication(sys.argv)
     store = Store(config.db_path)
-    recorder = SounddeviceRecorder()
+    recorder = SounddeviceRecorder(device=config.input_device or None)
     controller = DictationController(
         recorder=recorder,
         transcriber=make_stt(
@@ -84,6 +84,7 @@ def run_qt_app(config: Config, *, config_path: Path | None = None, autostart: bo
 
     hub.on_activation_mode = lambda mode: bind_listener(mode=mode)
     hub.on_hotkey = lambda hotkey: bind_listener(hotkey=hotkey)
+    hub.on_input_device = lambda name: setattr(recorder, "device", name or None)
 
     def pause_hotkeys() -> None:
         if paused["value"]:

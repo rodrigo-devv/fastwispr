@@ -377,6 +377,9 @@ def config_to_toml(config: Config) -> str:
             "",
             "[ui]",
             f"theme = {quote_string(config.ui_theme)}",
+            "",
+            "[audio]",
+            f"input_device = {quote_string(config.input_device)}",
         ]
     )
 
@@ -413,6 +416,7 @@ def parse_config_value(section: str, option: str, raw_value: str) -> str | float
         "privacy": {"store_audio", "store_raw_transcripts"},
         "injection": {"restore_clipboard", "save_to_clipboard"},
         "ui": {"theme"},
+        "audio": {"input_device"},
     }
     if option not in supported.get(section, set()):
         raise SystemExit(f"Unsupported config key: {section}.{option}")

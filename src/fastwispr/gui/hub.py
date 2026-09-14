@@ -8,6 +8,7 @@ from ..config_edit import set_config_value
 from ..controller import DictationController
 from ..db import DictationEvent, Store
 from ..stt import normalize_language_mode
+from ..windows.audio import list_input_devices
 from ..windows.settings_ui import apply_stt_preset_to_values, stt_preset_from_values
 from .theme import (
     CHIP_H,
@@ -653,6 +654,11 @@ class DragValue(QWidget):
         self._saved = self._value()
         return self._saved
 
+    def set_value(self, value: float) -> None:
+        raw = int(round(value / self._step))
+        raw = max(self._slider.minimum(), min(self._slider.maximum(), raw))
+        self._slider.setValue(raw)
+
     def _value(self) -> float:
         return self._slider.value() * self._step
 
@@ -968,6 +974,7 @@ class AppShell(QWidget):
         self._quitting = False
         self.on_activation_mode: Callable[[str], None] | None = None
         self.on_hotkey: Callable[[str], None] | None = None
+        self.on_input_device: Callable[[str], None] | None = None
         self._tip = DelayedTip(self._tokens)
         self.setObjectName("AppShell")
         self.setAttribute(Qt.WA_TranslucentBackground, True)
@@ -1639,7 +1646,7 @@ class AppShell(QWidget):
                 ],
             )
         )
-        body.addWidget(self._settings_block("Microphone", [self._settings_row("Input device", trailing=self._mic_controls(), tip="Microphone used for dictation.")]))
+        body.addWidget(self._settings_block("Microphone", [self._settings_row("Input device", trailing=self._mic_dropdown(), tip="Microphone used for dictation.")]))
         body.addWidget(self._settings_block("Cloud", [self._settings_row("Coming later", value="WIP", tip="Cloud dictation is not available yet.")]))
         body.addWidget(self._about_button())
         body.addStretch(1)
@@ -1767,32 +1774,28 @@ class AppShell(QWidget):
         editor.setMouseTracking(True)
         return editor
 
-    def _save_chip(self) -> QPushButton:
-        btn = QPushButton(" Save")
-        btn.setObjectName("SaveMini")
+    def _save_chip(self, label: str = "Save", *, primary: bool = True) -> QPushButton:
+        btn = QPushButton(label)
+        btn.setObjectName("SaveMini" if primary else "QuietMini")
         btn.setFixedHeight(28)
-        btn.setMinimumWidth(78)
+        btn.setMinimumWidth(72)
         btn.setFocusPolicy(Qt.NoFocus)
-        btn.setIcon(QIcon(icon_pixmap("check", "#FFFFFF", size=14, canvas=14)))
-        btn.setIconSize(QSize(14, 14))
         return btn
 
-    def _mic_controls(self) -> QWidget:
-        wrap = QWidget()
-        row = QHBoxLayout(wrap)
-        row.setContentsMargins(0, 0, 0, 0)
-        row.setSpacing(6)
-        device = QPushButton(" Default")
-        device.setObjectName("Select")
-        device.setFixedHeight(34)
-        device.setFocusPolicy(Qt.NoFocus)
-        device.setIcon(QIcon(icon_pixmap("mic", self._tokens["text_secondary"], size=FOOTER_ICON_PX, canvas=FOOTER_ICON_PX)))
-        device.setIconSize(QSize(FOOTER_ICON_PX, FOOTER_ICON_PX))
-        save = self._save_chip()
-        save.clicked.connect(lambda: self.toast.show_message("Default microphone", self))
-        row.addWidget(device)
-        row.addWidget(save)
-        return wrap
+    def _mic_dropdown(self) -> Select:
+        names = list_input_devices()
+        options = [("", "Default"), *[(name, name) for name in names]]
+        current = self.config.input_device if any(code == self.config.input_device for code, _label in options) else ""
+        control = Select(options, current, self._tokens)
+
+        def persist(code: str) -> None:
+            set_config_value(self.config_path, "audio.input_device", code)
+            self.config = load_config(self.config_path)
+            if self.on_input_device is not None:
+                self.on_input_device(code)
+
+        control.changed.connect(persist)
+        return control
 
     def _drag_save(self, fields: list[tuple[str, DragValue]]) -> QWidget:
         wrap = QWidget()
@@ -1800,7 +1803,8 @@ class AppShell(QWidget):
         row = QHBoxLayout(wrap)
         row.setContentsMargins(0, 4, 0, 0)
         row.addStretch(1)
-        save = self._save_chip()
+        default = self._save_chip("Default", primary=False)
+        save = self._save_chip("Save")
         save.setEnabled(False)
 
         def refresh() -> None:
@@ -1812,9 +1816,17 @@ class AppShell(QWidget):
                     self._save_field(key, f"{item.commit():g}")
             refresh()
 
+        def reset() -> None:
+            defaults = {"dictation.min_record_seconds": 0.35, "dictation.min_audio_rms": 0.003}
+            for key, item in fields:
+                item.set_value(defaults[key])
+            refresh()
+
         for _key, item in fields:
             item.changed.connect(lambda *_args: refresh())
+        default.clicked.connect(reset)
         save.clicked.connect(persist)
+        row.addWidget(default)
         row.addWidget(save)
         return wrap
 

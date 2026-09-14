@@ -66,3 +66,18 @@ def test_sounddevice_recorder_records_until_stop_and_reports_level(tmp_path: Pat
     assert output.exists()
     with wave.open(str(output), "rb") as fh:
         assert fh.readframes(4) == b"\x01\x00\x02\x00\x03\x00\x04\x00"
+
+
+def test_list_input_devices_skips_outputs():
+    class Fake:
+        def query_devices(self):
+            return [
+                {"name": "Speakers", "max_input_channels": 0},
+                {"name": "Headset Mic", "max_input_channels": 1},
+                {"name": "Headset Mic", "max_input_channels": 2},
+                {"name": "Webcam", "max_input_channels": 1},
+            ]
+
+    from fastwispr.windows.audio import list_input_devices
+
+    assert list_input_devices(Fake()) == ["Headset Mic", "Webcam"]
