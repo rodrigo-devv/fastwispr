@@ -43,7 +43,6 @@ try:
     from .icons import FOOTER_ICON_PX, ICON_PX, icon_pixmap
     from PySide6.QtWidgets import (
         QApplication,
-        QButtonGroup,
         QDialog,
         QFrame,
         QHBoxLayout,
@@ -870,12 +869,21 @@ class PasteFailedCard(QWidget):
     def __init__(self, on_copy, on_retry, parent=None):
         super().__init__(parent, Qt.Tool | Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_ShowWithoutActivating)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self._tokens = theme_tokens("dark")
+        self.setFixedSize(240, 112)
+        self.setStyleSheet(app_qss(self._tokens))
         box = QVBoxLayout(self)
+        box.setContentsMargins(14, 12, 14, 12)
+        box.setSpacing(8)
         title = QLabel("Paste failed")
-        title.setStyleSheet("font-weight:600;")
+        title.setStyleSheet("font-weight:600; background: transparent;")
+        body = QLabel("Your transcript is safe.")
+        body.setObjectName("Secondary")
         box.addWidget(title)
-        box.addWidget(QLabel("Your transcript is safe."))
+        box.addWidget(body)
         row = QHBoxLayout()
+        row.setSpacing(8)
         copy_btn = QPushButton("Copy")
         copy_btn.setObjectName("Primary")
         copy_btn.clicked.connect(lambda: (on_copy(), self.hide()))
@@ -884,6 +892,23 @@ class PasteFailedCard(QWidget):
         row.addWidget(copy_btn)
         row.addWidget(retry)
         box.addLayout(row)
+
+    def restyle(self, tokens: dict[str, str]) -> None:
+        self._tokens = tokens
+        self.setStyleSheet(app_qss(tokens))
+        self.update()
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        del event
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        path = QPainterPath()
+        path.addRoundedRect(rect, 8, 8)
+        painter.fillPath(path, QColor(self._tokens["surface"]))
+        painter.setPen(QPen(QColor(self._tokens["border"]), 1))
+        painter.drawPath(path)
+        painter.end()
 
 
 class CloseDialog(QDialog):
@@ -1208,6 +1233,7 @@ class AppShell(QWidget):
         pal.setColor(QPalette.ColorRole.ButtonText, QColor(tokens["text"]))
         pal.setColor(QPalette.ColorRole.PlaceholderText, QColor(tokens["text_muted"]))
         self.setPalette(pal)
+        self.paste_card.restyle(tokens)
         for page in self.pages.values():
             page.setAutoFillBackground(True)
             page.setPalette(pal)
@@ -1463,6 +1489,7 @@ class AppShell(QWidget):
     def _chip(self, caption: str, value: str, on_click) -> QFrame:
         frame = QFrame()
         frame.setObjectName("Chip")
+        frame.setAttribute(Qt.WA_Hover, True)
         frame.setFixedHeight(CHIP_H)
         frame.setCursor(Qt.PointingHandCursor)
         row = QHBoxLayout(frame)
@@ -1941,14 +1968,11 @@ class AppShell(QWidget):
     def _build_shortcuts(self) -> None:
         layout = self._clear("shortcuts")
         layout.addWidget(self._hotkey_row())
-        layout.addWidget(QLabel("Copy last  Shift+Alt+Z"))
         layout.addStretch(1)
 
     def _build_speech(self) -> None:
         layout = self._clear("speech")
         layout.addWidget(QLabel("Preset"))
-        row = QHBoxLayout()
-        group = QButtonGroup(self.pages["speech"])
         current = stt_preset_from_values(
             {
                 "stt.model": self.config.stt_model,
@@ -1956,16 +1980,7 @@ class AppShell(QWidget):
                 "stt.compute_type": self.config.stt_compute_type,
             }
         )
-        for name in ("Fast", "Balanced", "Accurate"):
-            btn = QPushButton(name)
-            btn.setCheckable(True)
-            btn.setChecked(current == name)
-            if current == name:
-                btn.setObjectName("Primary")
-            btn.clicked.connect(lambda _=False, n=name: self._apply_preset(n))
-            group.addButton(btn)
-            row.addWidget(btn)
-        layout.addLayout(row)
+        layout.addWidget(self._segmented(["Fast", "Balanced", "Accurate"], current, self._apply_preset))
         for key, value in (
             ("Model", model_chip_label(self.config.stt_model)),
             ("Language", self.config.stt_language),

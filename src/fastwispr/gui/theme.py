@@ -431,7 +431,7 @@ QPushButton#Chip {{
   padding: 0 12px;
   min-height: 46px;
 }}
-QPushButton#Chip:hover {{
+QPushButton#Chip:hover, QFrame#Chip:hover {{
   background: {tokens['surface_hover']};
   border-color: {tokens['border_hover']};
 }}
