@@ -667,6 +667,68 @@ class DragValue(QWidget):
         self.changed.emit(self._value())
 
 
+class MiniButton(QPushButton):
+    """Gray-border chip. QSS 1px borders disappear on Windows Fusion, so we paint them."""
+
+    def __init__(self, label: str, tokens: dict[str, str], *, primary: bool = False, parent=None):
+        super().__init__(label, parent)
+        self._tokens = tokens
+        self._primary = primary
+        self.setFixedSize(76, 28)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setFocusPolicy(Qt.NoFocus)
+        self.setFlat(True)
+        self.setAttribute(Qt.WA_Hover, True)
+        self.setStyleSheet("QPushButton { min-height: 28px; max-height: 28px; min-width: 76px; padding: 0; border: none; background: transparent; }")
+
+    def enterEvent(self, event) -> None:  # noqa: N802
+        self.update()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event) -> None:  # noqa: N802
+        self.update()
+        super().leaveEvent(event)
+
+    def changeEvent(self, event) -> None:  # noqa: N802
+        if event.type() == QEvent.Type.EnabledChange:
+            self.setCursor(Qt.PointingHandCursor if self.isEnabled() else Qt.ArrowCursor)
+            self.update()
+        super().changeEvent(event)
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        del event
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        rect = QRectF(self.rect()).adjusted(0.5, 0.5, -1.5, -1.5)
+        disabled = not self.isEnabled()
+        hover = self.underMouse() and not disabled
+        pressed = self.isDown() and not disabled
+        bg = self._tokens["surface"]
+        fg = self._tokens["text"]
+        border = self._tokens["text_muted"]
+        if disabled:
+            fg = self._tokens["text_muted"]
+            border = self._tokens["border"]
+        elif pressed:
+            bg = self._tokens["surface_2"]
+            border = self._tokens["text_secondary"]
+        elif hover:
+            bg = self._tokens["surface_hover"]
+            border = self._tokens["text_secondary"]
+        path = QPainterPath()
+        path.addRoundedRect(rect, 5, 5)
+        painter.fillPath(path, QColor(bg))
+        painter.setPen(QPen(QColor(border), 1))
+        painter.drawPath(path)
+        font = QFont(self.font())
+        font.setPixelSize(12)
+        font.setWeight(QFont.DemiBold if self._primary else QFont.Medium)
+        painter.setFont(font)
+        painter.setPen(QColor(fg))
+        painter.drawText(self.rect(), Qt.AlignCenter, self.text())
+        painter.end()
+
+
 class TranscriptRow(QFrame):
     def __init__(self, event: DictationEvent, on_copy, on_open, tokens: dict[str, str] | None = None, on_delete=None, parent=None, include_group: bool = True):
         super().__init__(parent)
@@ -1774,15 +1836,6 @@ class AppShell(QWidget):
         editor.setMouseTracking(True)
         return editor
 
-    def _save_chip(self, label: str = "Save", *, primary: bool = True) -> QPushButton:
-        btn = QPushButton(label)
-        btn.setObjectName("SaveMini" if primary else "QuietMini")
-        btn.setFixedHeight(28)
-        btn.setMinimumWidth(72)
-        btn.setCursor(Qt.PointingHandCursor)
-        btn.setFocusPolicy(Qt.NoFocus)
-        return btn
-
     def _mic_dropdown(self) -> Select:
         names = list_input_devices()
         options = [("", "Default"), *[(name, name) for name in names]]
@@ -1800,12 +1853,13 @@ class AppShell(QWidget):
 
     def _drag_save(self, fields: list[tuple[str, DragValue]]) -> QWidget:
         wrap = QWidget()
-        wrap.setFixedHeight(34)
+        wrap.setFixedHeight(32)
         row = QHBoxLayout(wrap)
-        row.setContentsMargins(0, 4, 0, 0)
+        row.setContentsMargins(0, 2, 0, 2)
+        row.setSpacing(8)
         row.addStretch(1)
-        default = self._save_chip("Default", primary=False)
-        save = self._save_chip("Save")
+        default = MiniButton("Default", self._tokens, primary=False)
+        save = MiniButton("Save", self._tokens, primary=True)
         save.setEnabled(False)
 
         def refresh() -> None:

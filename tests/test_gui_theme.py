@@ -70,3 +70,13 @@ def test_history_grouping():
     assert history_group_label("2026-09-12 17:42:00", now) == "Yesterday"
     assert "13:42" in history_meta_line("2026-09-13 13:42:00", 4800, now)
     assert history_meta_line("2026-09-13 13:42:00", 4800, now, include_group=False) == "13:42 · 4.8s"
+
+
+def test_footer_ghost_hover_is_subtle():
+    from fastwispr.gui.theme import app_qss
+
+    tokens = theme_tokens("dark")
+    hover = app_qss(tokens).split("QPushButton#FooterGhost:hover")[1].split("QPushButton#FooterGhost:pressed")[0]
+    assert tokens["accent"] not in hover
+    assert tokens["accent_soft"] not in hover
+    assert tokens["surface_hover"] in hover
