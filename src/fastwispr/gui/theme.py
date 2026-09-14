@@ -252,14 +252,17 @@ QPushButton#SaveMini {{
   border-radius: 5px;
   font-size: 12px;
   font-weight: 600;
-  padding: 0 12px;
+  padding: 0 10px;
   min-height: 28px;
   max-height: 28px;
-  min-width: 56px;
-  max-width: 56px;
+  min-width: 78px;
 }}
 QPushButton#SaveMini:hover {{
   background: {tokens['accent_hover']};
+}}
+QPushButton#SaveMini:pressed {{
+  background: {tokens['accent']};
+  padding-top: 1px;
 }}
 QPushButton#SaveMini:disabled {{
   background: {tokens['surface']};
@@ -278,7 +281,13 @@ QPushButton#FooterGhost {{
   padding: 0 12px;
 }}
 QPushButton#FooterGhost:hover {{
-  background: {tokens['surface_hover']};
+  background: {tokens['accent_soft']};
+  border: 1px solid {tokens['accent']};
+}}
+QPushButton#FooterGhost:pressed {{
+  background: {tokens['accent_soft']};
+  border: 1px solid {tokens['accent_hover']};
+  padding-top: 1px;
 }}
 QPushButton#FooterPrimary {{
   background: {tokens['accent']};
@@ -422,6 +431,10 @@ QPushButton#Select {{
 QPushButton#Select:hover {{
   background: {tokens['surface_hover']};
   border-color: {tokens['border_hover']};
+}}
+QPushButton#Select:pressed {{
+  background: {tokens['accent_soft']};
+  border: 1px solid {tokens['accent']};
 }}
 QPushButton#Select:focus {{
   border: 1px solid {tokens['accent']};

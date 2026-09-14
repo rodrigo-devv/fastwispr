@@ -1639,7 +1639,7 @@ class AppShell(QWidget):
                 ],
             )
         )
-        body.addWidget(self._settings_block("Microphone", [self._settings_row("Input device", trailing=self._language_select([("default", "Default")]), tip="Microphone used for dictation.")]))
+        body.addWidget(self._settings_block("Microphone", [self._settings_row("Input device", trailing=self._mic_controls(), tip="Microphone used for dictation.")]))
         body.addWidget(self._settings_block("Cloud", [self._settings_row("Coming later", value="WIP", tip="Cloud dictation is not available yet.")]))
         body.addWidget(self._about_button())
         body.addStretch(1)
@@ -1767,16 +1767,40 @@ class AppShell(QWidget):
         editor.setMouseTracking(True)
         return editor
 
+    def _save_chip(self) -> QPushButton:
+        btn = QPushButton(" Save")
+        btn.setObjectName("SaveMini")
+        btn.setFixedHeight(28)
+        btn.setMinimumWidth(78)
+        btn.setFocusPolicy(Qt.NoFocus)
+        btn.setIcon(QIcon(icon_pixmap("check", "#FFFFFF", size=14, canvas=14)))
+        btn.setIconSize(QSize(14, 14))
+        return btn
+
+    def _mic_controls(self) -> QWidget:
+        wrap = QWidget()
+        row = QHBoxLayout(wrap)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(6)
+        device = QPushButton(" Default")
+        device.setObjectName("Select")
+        device.setFixedHeight(34)
+        device.setFocusPolicy(Qt.NoFocus)
+        device.setIcon(QIcon(icon_pixmap("mic", self._tokens["text_secondary"], size=FOOTER_ICON_PX, canvas=FOOTER_ICON_PX)))
+        device.setIconSize(QSize(FOOTER_ICON_PX, FOOTER_ICON_PX))
+        save = self._save_chip()
+        save.clicked.connect(lambda: self.toast.show_message("Default microphone", self))
+        row.addWidget(device)
+        row.addWidget(save)
+        return wrap
+
     def _drag_save(self, fields: list[tuple[str, DragValue]]) -> QWidget:
         wrap = QWidget()
         wrap.setFixedHeight(34)
         row = QHBoxLayout(wrap)
         row.setContentsMargins(0, 4, 0, 0)
         row.addStretch(1)
-        save = QPushButton("Save")
-        save.setObjectName("SaveMini")
-        save.setFixedSize(56, 28)
-        save.setFocusPolicy(Qt.NoFocus)
+        save = self._save_chip()
         save.setEnabled(False)
 
         def refresh() -> None:
