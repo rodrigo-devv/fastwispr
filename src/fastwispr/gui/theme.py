@@ -9,11 +9,13 @@ HUB_INSET_RIGHT = 20
 HUB_INSET_BOTTOM = 16
 TITLEBAR_H = 52
 PAGEBAR_H = 44
-FOOTER_H = 40
+FOOTER_H = 34
 OVERLAY_H = 38
 OVERLAY_MIN_W = 140
 OVERLAY_TOP = 24
 OVERLAY_PAD_X = 13
+OVERLAY_FILL = "#111315"
+OVERLAY_BORDER = "#272A2E"
 CHIP_H = 46
 SEARCH_H = 34
 ROW_H = 46
@@ -80,28 +82,24 @@ def hub_top_left(avail_right: int, avail_bottom: int, width: int, height: int) -
 
 
 def overlay_rest_pos(
-    avail_right: int,
-    avail_bottom: int,
+    avail_left: int,
+    avail_top: int,
+    avail_width: int,
     pill_width: int,
     pill_height: int = OVERLAY_H,
 ) -> tuple[int, int]:
-    # Bottom-right, 20px from the right edge, 16px above the taskbar.
-    return (
-        avail_right - pill_width - HUB_INSET_RIGHT,
-        avail_bottom - pill_height - HUB_INSET_BOTTOM,
-    )
+    del pill_height
+    return (avail_left + (avail_width - pill_width) // 2, avail_top + OVERLAY_TOP)
 
 
 def overlay_enter_pos(
     avail_right: int,
-    avail_bottom: int,
+    avail_top: int,
     pill_width: int,
     pill_height: int = OVERLAY_H,
 ) -> tuple[int, int]:
-    # Fully outside the right edge, same baseline as rest.
-    _x, y = overlay_rest_pos(avail_right, avail_bottom, pill_width, pill_height)
-    del _x
-    return (avail_right + pill_width + 24, y)
+    del pill_height
+    return (avail_right + pill_width + OVERLAY_TOP, avail_top + OVERLAY_TOP)
 
 
 def model_chip_label(stt_model: str) -> str:
@@ -209,7 +207,11 @@ QLabel#StatusLabel {{
   font-size: 20px;
   font-weight: 600;
 }}
-QLabel#Secondary, QLabel#Meta {{
+QLabel#Secondary {{
+  color: {tokens['text_secondary']};
+  font-size: 12px;
+}}
+QLabel#Meta {{
   color: {tokens['text_muted']};
   font-size: 11px;
 }}
@@ -246,6 +248,7 @@ QPushButton:enabled:hover {{
 }}
 QPushButton:focus {{
   border: 1px solid {tokens['accent']};
+  outline: 2px solid {tokens['accent_soft']};
 }}
 QPushButton:disabled {{
   background: {tokens['surface']};
@@ -411,10 +414,10 @@ QPushButton#CopyBtn {{
   background: transparent;
   border: 1px solid transparent;
   border-radius: 5px;
-  min-width: 24px;
-  max-width: 24px;
-  min-height: 24px;
-  max-height: 24px;
+  min-width: {COPY_BTN}px;
+  max-width: {COPY_BTN}px;
+  min-height: {COPY_BTN}px;
+  max-height: {COPY_BTN}px;
   padding: 0px;
 }}
 QPushButton#CopyBtn:hover {{
@@ -542,16 +545,21 @@ QLineEdit, QPlainTextEdit {{
 }}
 QLineEdit:focus, QPlainTextEdit:focus {{
   border: 1px solid {tokens['accent']};
+  outline: 2px solid {tokens['accent_soft']};
 }}
 QFrame#Card, QFrame#Chip, QFrame#Keycap {{
   background: {tokens['surface']};
   border: 1px solid {tokens['border']};
   border-radius: 5px;
 }}
-QFrame#HistoryCard {{
+QFrame#HistoryRow {{
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid {tokens['border']};
+  border-radius: 0px;
+}}
+QFrame#HistoryRow:hover {{
   background: {tokens['surface']};
-  border: 1px solid {tokens['border']};
-  border-radius: 12px;
 }}
 QLabel#LangChip {{
   color: {tokens['text_secondary']};

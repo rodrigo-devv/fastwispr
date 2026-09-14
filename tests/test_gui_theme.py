@@ -1,12 +1,16 @@
 from datetime import datetime
 
 from fastwispr.gui.theme import (
+    FOOTER_H,
     HUB_DEFAULT,
     HUB_INSET_BOTTOM,
     HUB_INSET_RIGHT,
     HUB_MAX,
     HUB_MIN,
+    OVERLAY_BORDER,
+    OVERLAY_FILL,
     OVERLAY_H,
+    OVERLAY_TOP,
     history_group_label,
     history_meta_line,
     hotkey_keycaps,
@@ -26,15 +30,20 @@ def test_hub_geometry_contract():
     assert hub_top_left(1920, 1040, 400, 560) == (1920 - 400 - HUB_INSET_RIGHT, 1040 - 560 - HUB_INSET_BOTTOM)
     assert HUB_INSET_RIGHT == 20
     assert HUB_INSET_BOTTOM == 16
+    assert FOOTER_H == 34
+    assert OVERLAY_TOP == 24
 
 
 def test_overlay_motion_contract():
     assert OVERLAY_H == 38
-    rest = overlay_rest_pos(1920, 1040, 176, 38)
-    assert rest == (1920 - 176 - HUB_INSET_RIGHT, 1040 - 38 - HUB_INSET_BOTTOM)
-    start = overlay_enter_pos(1920, 1040, 176, 38)
+    rest = overlay_rest_pos(0, 0, 1920, 228, 38)
+    assert rest == (846, 24)
+    start = overlay_enter_pos(1920, 0, 228, 38)
     assert start[0] > 1920
+    assert start[1] == 24
     assert start[1] == rest[1]
+    assert OVERLAY_FILL == "#111315"
+    assert OVERLAY_BORDER == "#272A2E"
 
 
 def test_home_copy_uses_real_model_and_ctrl_space():
@@ -48,7 +57,7 @@ def test_lucide_icon_catalog_covers_chrome():
 
     for name in ("sun", "moon", "minus", "x", "copy", "chevron-left", "chevron-right", "chevron-down", "settings", "book", "quote", "mic", "trash", "pencil", "more"):
         assert name in ICON_NAMES
-    assert ICON_PX == 22
+    assert ICON_PX == 15
 
 
 def test_light_theme_keeps_same_geometry_tokens():
@@ -89,3 +98,12 @@ def test_footer_ghost_hover_is_subtle():
     assert tokens["accent"] not in hover
     assert tokens["accent_soft"] not in hover
     assert tokens["surface_hover"] in hover
+
+
+def test_secondary_label_uses_text_secondary():
+    from fastwispr.gui.theme import app_qss
+
+    tokens = theme_tokens("dark")
+    block = app_qss(tokens).split("QLabel#Secondary")[1].split("QLabel#Meta")[0]
+    assert tokens["text_secondary"] in block
+    assert tokens["text_muted"] not in block

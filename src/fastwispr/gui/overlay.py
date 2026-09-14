@@ -4,7 +4,7 @@ import math
 import time
 from typing import Callable
 
-from .theme import OVERLAY_H, OVERLAY_MIN_W, OVERLAY_PAD_X, overlay_enter_pos, overlay_rest_pos, theme_tokens
+from .theme import OVERLAY_BORDER, OVERLAY_FILL, OVERLAY_H, OVERLAY_MIN_W, OVERLAY_PAD_X, overlay_enter_pos, overlay_rest_pos, theme_tokens
 
 try:
     from PySide6.QtCore import QEasingCurve, QParallelAnimationGroup, QPoint, QPropertyAnimation, QRect, QRectF, Qt, QTimer
@@ -15,7 +15,7 @@ except ImportError as exc:  # pragma: no cover - optional extra
 
 
 class QtRecordingOverlay(QWidget):
-    """Signature pill: bottom-right, enters from the right, never steals focus."""
+    """Signature pill: top-center, enters from the right, never steals focus."""
 
     def __init__(self, *, theme_preference: str = "dark"):
         super().__init__(None)
@@ -29,7 +29,7 @@ class QtRecordingOverlay(QWidget):
         self._retry_rect = QRect()
         self._error_click: Callable[[], None] | None = None
         self._retry_click: Callable[[], None] | None = None
-        self._tokens = theme_tokens(theme_preference)
+        self._tokens = theme_tokens("dark")
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Tool | Qt.WindowStaysOnTopHint)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setAttribute(Qt.WA_ShowWithoutActivating)
@@ -62,7 +62,7 @@ class QtRecordingOverlay(QWidget):
 
     def set_theme_preference(self, preference: str) -> None:
         self.theme_preference = preference
-        self._tokens = theme_tokens(preference)
+        self._tokens = theme_tokens("dark")
         self.update()
 
     def set_level(self, level: float) -> None:
@@ -128,8 +128,8 @@ class QtRecordingOverlay(QWidget):
         path = QPainterPath()
         radius = (OVERLAY_H - 1) / 2
         path.addRoundedRect(QRectF(0.5, 0.5, self.width() - 1.0, self.height() - 1.0), radius, radius)
-        painter.fillPath(path, QColor(tokens["surface"]))
-        painter.setPen(QPen(QColor(tokens["border"]), 1))
+        painter.fillPath(path, QColor(OVERLAY_FILL))
+        painter.setPen(QPen(QColor(OVERLAY_BORDER), 1))
         painter.drawPath(path)
         if self.state == "recording":
             self._paint_recording(painter, tokens)
@@ -159,12 +159,12 @@ class QtRecordingOverlay(QWidget):
 
     def _rest_point(self) -> QPoint:
         avail = self._avail()
-        x, y = overlay_rest_pos(avail.right(), avail.bottom(), self.width(), self.height())
+        x, y = overlay_rest_pos(avail.left(), avail.top(), avail.width(), self.width(), self.height())
         return QPoint(x, y)
 
     def _enter_point(self) -> QPoint:
         avail = self._avail()
-        x, y = overlay_enter_pos(avail.right(), avail.bottom(), self.width(), self.height())
+        x, y = overlay_enter_pos(avail.right(), avail.top(), self.width(), self.height())
         return QPoint(x, y)
 
     def _animate(self, *, show: bool) -> None:

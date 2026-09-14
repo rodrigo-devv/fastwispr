@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-# Lucide-style 24x24 stroke icons. Painted at 22px. Footer actions stay 18px.
+# Lucide-style 24x24 stroke icons. Painted at 15px in 32px buttons. Footer actions stay 18px.
 
-ICON_PX = 22
+ICON_PX = 15
 FOOTER_ICON_PX = 18
 ICON_NAMES = (
     "sun",

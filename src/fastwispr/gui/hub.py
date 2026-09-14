@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import os
 from typing import Callable
 
 from ..config import Config, load_config
@@ -21,6 +22,7 @@ from .theme import (
     ROW_H,
     SEARCH_H,
     TITLEBAR_H,
+    TOAST_MAX,
     app_qss,
     format_clock,
     format_duration_ms,
@@ -43,13 +45,11 @@ try:
         QApplication,
         QButtonGroup,
         QDialog,
-        QDialogButtonBox,
         QFrame,
         QHBoxLayout,
         QLabel,
         QLineEdit,
         QMenu,
-        QMessageBox,
         QPlainTextEdit,
         QPushButton,
         QRadioButton,
@@ -95,81 +95,19 @@ def tray_icon_pixmap() -> QPixmap:
     return pix
 
 
-class ThemeSwitch(QWidget):
-    """Compact sun/moon track. Dark = knob right. Light = knob left."""
-
-    clicked = Signal()
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self._dark = True
-        self._gx = 32.0
-        self._tokens = theme_tokens("dark")
-        self.setFixedSize(52, 22)
-        self.setCursor(Qt.PointingHandCursor)
-        self.setFocusPolicy(Qt.NoFocus)
-        self.setToolTip("Theme")
-        self._anim = QPropertyAnimation(self, b"knobX", self)
-        self._anim.setDuration(220)
-        self._anim.setEasingCurve(QEasingCurve.OutCubic)
-
-    def _knob_x(self) -> float:
-        return self._gx
-
-    def _set_knob_x(self, value: float) -> None:
-        self._gx = float(value)
-        self.update()
-
-    knobX = Property(float, _knob_x, _set_knob_x)
-
-    def set_dark(self, dark: bool, tokens: dict[str, str]) -> None:
-        self._tokens = tokens
-        self._dark = dark
-        target = 32.0 if dark else 2.0
-        if self.isVisible() and abs(self._gx - target) > 0.5:
-            self._anim.stop()
-            self._anim.setStartValue(self._gx)
-            self._anim.setEndValue(target)
-            self._anim.start()
-        else:
-            self._gx = target
-            self.update()
-
-    def mousePressEvent(self, event) -> None:  # noqa: N802
-        if event.button() == Qt.LeftButton:
-            self.clicked.emit()
-
-    def paintEvent(self, event) -> None:  # noqa: N802
-        del event
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-        track = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
-        path = QPainterPath()
-        path.addRoundedRect(track, 6, 6)
-        fill = QColor("#3A3A3A" if self._dark else "#CECECE")
-        painter.fillPath(path, fill)
-        painter.setPen(QPen(QColor(self._tokens["border"]), 1))
-        painter.drawPath(path)
-        moon = icon_pixmap("moon", "#F2F2F2" if self._dark else "#3A3A3A", size=12, canvas=12)
-        sun = icon_pixmap("sun", "#CECECE" if self._dark else "#3A3A3A", size=12, canvas=12)
-        painter.drawPixmap(5, 5, moon)
-        painter.drawPixmap(35, 5, sun)
-        knob = QRectF(self._gx, 2, 18, 18)
-        blob = QPainterPath()
-        blob.addRoundedRect(knob, 5, 5)
-        painter.setPen(Qt.NoPen)
-        painter.fillPath(blob, QColor("#F5F5F5" if self._dark else "#212121"))
-        painter.end()
-
-
 class TitleBar(QWidget):
     def __init__(self, on_theme, on_min, on_close, parent=None):
         super().__init__(parent)
         self.setObjectName("TitleBar")
         self.setFixedHeight(TITLEBAR_H)
         self._drag: QPoint | None = None
-        self.theme_switch = ThemeSwitch()
-        self.theme_switch.clicked.connect(on_theme)
+        self.theme_btn = QPushButton()
+        self.theme_btn.setObjectName("IconBtn")
+        self.theme_btn.setFixedSize(32, 32)
+        self.theme_btn.setToolTip("Theme")
+        self.theme_btn.setFocusPolicy(Qt.NoFocus)
+        self.theme_btn.setCursor(Qt.PointingHandCursor)
+        self.theme_btn.clicked.connect(on_theme)
         self.minimize_btn = QPushButton()
         self.minimize_btn.setObjectName("CaptionBtn")
         self.minimize_btn.setToolTip("Minimize")
@@ -196,10 +134,7 @@ class TitleBar(QWidget):
         layout.addWidget(fast)
         layout.addWidget(wispr)
         layout.addStretch(1)
-        layout.addWidget(self.theme_switch, 0, Qt.AlignVCenter)
-        spacer = QWidget()
-        spacer.setFixedWidth(8)
-        layout.addWidget(spacer)
+        layout.addWidget(self.theme_btn, 0, Qt.AlignVCenter)
         divider = QFrame()
         divider.setObjectName("ChromeDivider")
         divider.setFixedSize(1, 16)
@@ -208,11 +143,13 @@ class TitleBar(QWidget):
         layout.addWidget(self.close_btn)
 
     def recolor(self, tokens: dict[str, str], resolved_theme: str) -> None:
-        self.theme_switch.set_dark(resolved_theme == "dark", tokens)
+        icon = "sun" if resolved_theme == "dark" else "moon"
+        self.theme_btn.setIcon(QIcon(icon_pixmap(icon, tokens["text_secondary"], size=ICON_PX, canvas=32)))
+        self.theme_btn.setIconSize(QSize(32, 32))
         self.minimize_btn.setIcon(QIcon(icon_pixmap("minus", tokens["text_secondary"], size=ICON_PX, canvas=40)))
-        self.minimize_btn.setIconSize(QSize(ICON_PX, ICON_PX))
+        self.minimize_btn.setIconSize(QSize(40, 40))
         self.close_btn.setIcon(QIcon(icon_pixmap("x", tokens["accent"], size=ICON_PX, canvas=40)))
-        self.close_btn.setIconSize(QSize(ICON_PX, ICON_PX))
+        self.close_btn.setIconSize(QSize(40, 40))
 
     def mousePressEvent(self, event) -> None:  # noqa: N802
         if event.button() == Qt.LeftButton:
@@ -704,18 +641,30 @@ class MiniButton(QPushButton):
         disabled = not self.isEnabled()
         hover = self.underMouse() and not disabled
         pressed = self.isDown() and not disabled
-        bg = self._tokens["surface"]
-        fg = self._tokens["text"]
-        border = self._tokens["text_muted"]
-        if disabled:
-            fg = self._tokens["text_muted"]
-            border = self._tokens["border"]
-        elif pressed:
-            bg = self._tokens["surface_2"]
-            border = self._tokens["text_secondary"]
-        elif hover:
-            bg = self._tokens["surface_hover"]
-            border = self._tokens["text_secondary"]
+        if self._primary:
+            bg = self._tokens["accent"]
+            fg = "#FFFFFF"
+            border = self._tokens["accent"]
+            if disabled:
+                bg = self._tokens["surface"]
+                fg = self._tokens["text_muted"]
+                border = self._tokens["border"]
+            elif hover:
+                bg = self._tokens["accent_hover"]
+                border = self._tokens["accent_hover"]
+        else:
+            bg = self._tokens["surface"]
+            fg = self._tokens["text"]
+            border = self._tokens["text_muted"]
+            if disabled:
+                fg = self._tokens["text_muted"]
+                border = self._tokens["border"]
+            elif pressed:
+                bg = self._tokens["surface_2"]
+                border = self._tokens["text_secondary"]
+            elif hover:
+                bg = self._tokens["surface_hover"]
+                border = self._tokens["text_secondary"]
         path = QPainterPath()
         path.addRoundedRect(rect, 5, 5)
         painter.fillPath(path, QColor(bg))
@@ -730,12 +679,79 @@ class MiniButton(QPushButton):
         painter.end()
 
 
+class FooterButton(QPushButton):
+    """Fusion ignores QSS hover/press on footers; paint like MiniButton."""
+
+    def __init__(self, label: str, tokens: dict[str, str], *, primary: bool = False, outline: bool = False, icon: str | None = None, parent=None):
+        super().__init__(f" {label}" if icon else label, parent)
+        self._tokens = tokens
+        self._primary = primary
+        self._outline = outline
+        self.setFixedHeight(FOOTER_H)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setFocusPolicy(Qt.NoFocus)
+        self.setFlat(True)
+        self.setAttribute(Qt.WA_Hover, True)
+        self.setObjectName("FooterPrimary" if primary else "FooterOutline" if outline else "FooterGhost")
+        self.setStyleSheet("QPushButton { min-height: 34px; max-height: 34px; padding: 0; border: none; background: transparent; }")
+        if icon:
+            color = "#FFFFFF" if primary else tokens["accent"] if outline else tokens["text"]
+            self.setIcon(QIcon(icon_pixmap(icon, color, size=FOOTER_ICON_PX, canvas=FOOTER_ICON_PX)))
+            self.setIconSize(QSize(FOOTER_ICON_PX, FOOTER_ICON_PX))
+
+    def enterEvent(self, event) -> None:  # noqa: N802
+        self.update()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event) -> None:  # noqa: N802
+        self.update()
+        super().leaveEvent(event)
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        del event
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        hover = self.underMouse()
+        pressed = self.isDown()
+        if self._primary:
+            bg = self._tokens["accent_hover"] if hover and not pressed else self._tokens["accent"]
+            fg = "#FFFFFF"
+            border = bg
+        else:
+            bg = self._tokens["surface_2"] if pressed else self._tokens["surface_hover"] if hover else self._tokens["surface"]
+            fg = self._tokens["text"]
+            border = self._tokens["accent"] if self._outline else self._tokens["border"]
+        path = QPainterPath()
+        path.addRoundedRect(rect, 5, 5)
+        painter.fillPath(path, QColor(bg))
+        painter.setPen(QPen(QColor(border), 1))
+        painter.drawPath(path)
+        icon_size = self.iconSize()
+        pix = self.icon().pixmap(icon_size)
+        font = QFont(self.font())
+        font.setPixelSize(13)
+        font.setWeight(QFont.DemiBold if self._primary else QFont.Medium)
+        painter.setFont(font)
+        painter.setPen(QColor(fg))
+        text = self.text()
+        gap = 6 if not pix.isNull() else 0
+        total = (icon_size.width() + gap if not pix.isNull() else 0) + painter.fontMetrics().horizontalAdvance(text)
+        x = (self.width() - total) / 2
+        if not pix.isNull():
+            painter.drawPixmap(int(x), (self.height() - icon_size.height()) // 2, pix)
+            x += icon_size.width() + gap
+        painter.drawText(QRectF(x, 0, max(0, self.width() - x), self.height()), Qt.AlignVCenter | Qt.AlignLeft, text)
+        painter.end()
+
+
 class TranscriptRow(QFrame):
-    def __init__(self, event: DictationEvent, on_copy, on_open, tokens: dict[str, str] | None = None, on_delete=None, parent=None, include_group: bool = True):
+    def __init__(self, event: DictationEvent, on_copy, on_open, tokens: dict[str, str] | None = None, on_delete=None, on_edit=None, parent=None, include_group: bool = True):
         super().__init__(parent)
         palette = tokens or theme_tokens("dark")
-        self.setObjectName("HistoryCard")
+        self.setObjectName("HistoryRow")
         self.setAttribute(Qt.WA_StyledBackground, True)
+        self.setAttribute(Qt.WA_Hover, True)
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
         self.setCursor(Qt.PointingHandCursor)
         layout = QHBoxLayout(self)
@@ -772,24 +788,35 @@ class TranscriptRow(QFrame):
         def icon_btn(name: str, tip: str, on_click) -> QPushButton:
             btn = QPushButton()
             btn.setObjectName("CopyBtn")
-            btn.setFixedSize(24, 24)
+            btn.setFixedSize(COPY_BTN, COPY_BTN)
             btn.setToolTip(tip)
             btn.setCursor(Qt.PointingHandCursor)
             btn.setFocusPolicy(Qt.NoFocus)
-            btn.setIcon(QIcon(icon_pixmap(name, palette["text_secondary"], size=16, canvas=24)))
-            btn.setIconSize(QSize(16, 16))
+            btn.setIcon(QIcon(icon_pixmap(name, palette["text_secondary"], size=ICON_PX, canvas=COPY_BTN)))
+            btn.setIconSize(QSize(COPY_BTN, COPY_BTN))
             btn.clicked.connect(on_click)
             return btn
 
         layout.addWidget(icon_btn("copy", "Copy", lambda: on_copy(event.final_text)), 0, Qt.AlignTop)
-        layout.addWidget(icon_btn("pencil", "Edit", lambda: on_open(event)), 0, Qt.AlignTop)
         menu = QMenu(self)
+        if on_edit is not None:
+            menu.addAction("Edit", lambda: on_edit(event))
         if on_delete is not None:
             menu.addAction("Delete", lambda: on_delete(event))
-        more = icon_btn("more", "More", lambda: menu.exec(more.mapToGlobal(more.rect().bottomLeft())) if not menu.isEmpty() else None)
-        layout.addWidget(more, 0, Qt.AlignTop)
+        self._more_icon = QIcon(icon_pixmap("more", palette["text_secondary"], size=ICON_PX, canvas=COPY_BTN))
+        self._more = icon_btn("more", "More", lambda: menu.exec(self._more.mapToGlobal(self._more.rect().bottomLeft())) if not menu.isEmpty() else None)
+        self._more.setIcon(QIcon())
+        layout.addWidget(self._more, 0, Qt.AlignTop)
         self._open = on_open
         self._event = event
+
+    def enterEvent(self, event) -> None:  # noqa: N802
+        self._more.setIcon(self._more_icon)
+        super().enterEvent(event)
+
+    def leaveEvent(self, event) -> None:  # noqa: N802
+        self._more.setIcon(QIcon())
+        super().leaveEvent(event)
 
     def mouseReleaseEvent(self, event) -> None:  # noqa: N802
         if event.button() == Qt.LeftButton:
@@ -804,9 +831,12 @@ class Toast(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent, Qt.Tool | Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_ShowWithoutActivating)
-        self.setFixedSize(* (280, 40))
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setFixedSize(*TOAST_MAX)
+        self._tokens = theme_tokens("dark")
         layout = QHBoxLayout(self)
-        self.label = QLabel("Copied")
+        layout.setContentsMargins(12, 0, 12, 0)
+        self.label = QLabel("✓ Copied")
         layout.addWidget(self.label)
         self._hide = QTimer(self)
         self._hide.setSingleShot(True)
@@ -814,10 +844,26 @@ class Toast(QWidget):
 
     def show_message(self, text: str, anchor: QWidget) -> None:
         self.label.setText(text)
+        tokens = getattr(anchor, "_tokens", None)
+        if isinstance(tokens, dict):
+            self._tokens = tokens
+        self.label.setStyleSheet(f"color: {self._tokens['text']}; font-size: 12px; background: transparent;")
         geo = anchor.frameGeometry()
         self.move(geo.right() - self.width() - 12, geo.bottom() - self.height() - 12)
         self.show()
         self._hide.start(1400)
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        del event
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        path = QPainterPath()
+        path.addRoundedRect(rect, 8, 8)
+        painter.fillPath(path, QColor(self._tokens["surface"]))
+        painter.setPen(QPen(QColor(self._tokens["border"]), 1))
+        painter.drawPath(path)
+        painter.end()
 
 
 class PasteFailedCard(QWidget):
@@ -1066,6 +1112,7 @@ class AppShell(QWidget):
         self.on_activation_mode: Callable[[str], None] | None = None
         self.on_hotkey: Callable[[str], None] | None = None
         self.on_input_device: Callable[[str], None] | None = None
+        self.on_start_recording: Callable[[], None] | None = None
         self._tip = DelayedTip(self._tokens)
         self.setObjectName("AppShell")
         self.setAttribute(Qt.WA_TranslucentBackground, True)
@@ -1078,10 +1125,6 @@ class AppShell(QWidget):
         root.setSpacing(0)
         self.titlebar = TitleBar(self._cycle_theme, self.showMinimized, self.confirm_close)
         root.addWidget(self.titlebar)
-        self.header_line = QFrame()
-        self.header_line.setObjectName("SectionDivider")
-        self.header_line.setFixedHeight(1)
-        root.addWidget(self.header_line)
         self.page_bar_host = QWidget()
         self.page_bar_layout = QVBoxLayout(self.page_bar_host)
         self.page_bar_layout.setContentsMargins(0, 0, 0, 0)
@@ -1205,10 +1248,10 @@ class AppShell(QWidget):
             "privacy": self._build_privacy,
             "appearance": self._build_appearance,
             "about": self._build_about,
-            "dictation": lambda: self._build_simple("dictation", [("dictation.min_record_seconds", "Minimum seconds"), ("dictation.min_audio_rms", "Minimum RMS"), ("injection.restore_clipboard", "Restore clipboard")]),
-            "shortcuts": lambda: self._fill_info("shortcuts", [f"Dictate  {self.config.hotkey}", "Copy last  Shift+Alt+Z"]),
-            "microphone": lambda: self._fill_info("microphone", ["Input device  Default"]),
-            "general": lambda: self._fill_info("general", ["Press Ctrl+Space to start dictation, press again to stop.", "Toggle is the only mode."]),
+            "dictation": self._build_dictation,
+            "shortcuts": self._build_shortcuts,
+            "microphone": self._build_microphone,
+            "general": self._build_general,
         }
         widget = self.pages[name]
         _wipe_layout(widget.layout())
@@ -1237,7 +1280,7 @@ class AppShell(QWidget):
                 add = self._add_snippet
             if name == "detail":
                 back_to = "history"
-            elif name in {"dictionary", "snippets", "about"}:
+            elif name in {"dictionary", "snippets", "about", "speech", "privacy", "appearance", "dictation", "shortcuts", "microphone", "general"}:
                 back_to = "settings"
             else:
                 back_to = "home"
@@ -1269,7 +1312,7 @@ class AppShell(QWidget):
                 QApplication.clipboard().setText(text)
         else:
             QApplication.clipboard().setText(text)
-        self.toast.show_message("Copied", self)
+        self.toast.show_message("✓ Copied", self)
 
     def copy_last(self) -> None:
         text = self.controller.copy_last_transcript() if self.controller is not None else ""
@@ -1279,7 +1322,7 @@ class AppShell(QWidget):
             if text:
                 self.copy_text(text)
             return
-        self.toast.show_message("Copied", self)
+        self.toast.show_message("✓ Copied", self)
 
     def retry_last(self) -> None:
         if self.controller is not None:
@@ -1318,7 +1361,7 @@ class AppShell(QWidget):
         painter.setRenderHint(QPainter.Antialiasing)
         rect = QRectF(self.rect()).adjusted(1.0, 1.0, -1.0, -1.0)
         path = QPainterPath()
-        path.addRoundedRect(rect, 8, 8)
+        path.addRoundedRect(rect, 9, 9)
         painter.fillPath(path, QColor(self._tokens["bg"]))
         painter.setPen(QPen(QColor(self._tokens["border"]), 1))
         painter.drawPath(path)
@@ -1376,7 +1419,7 @@ class AppShell(QWidget):
         layout.addLayout(status_row)
         hint = QHBoxLayout()
         hint.addStretch(1)
-        press = QLabel("Press")
+        press = QLabel("Hold")
         press.setObjectName("Hint")
         hint.addWidget(press)
         for cap in hotkey_keycaps(self.config.hotkey):
@@ -1388,8 +1431,8 @@ class AppShell(QWidget):
         layout.addLayout(hint)
         chips = QHBoxLayout()
         chips.setSpacing(8)
-        chips.addWidget(self._chip("Model", model_chip_label(self.config.stt_model), lambda: self.show_page("settings")), 1)
-        chips.addWidget(self._chip("Microphone", "Default", lambda: self.show_page("settings")), 1)
+        chips.addWidget(self._chip("Model", model_chip_label(self.config.stt_model), lambda: self.show_page("speech")), 1)
+        chips.addWidget(self._chip("Microphone", self.config.input_device or "Default", lambda: self.show_page("microphone")), 1)
         layout.addLayout(chips)
         layout.addWidget(self._section_line())
         recent_head = QHBoxLayout()
@@ -1408,7 +1451,7 @@ class AppShell(QWidget):
             empty.setObjectName("Secondary")
             layout.addWidget(empty)
         for event in events:
-            layout.addWidget(TranscriptRow(event, self.copy_text, lambda ev: self.show_page("detail", ev), tokens=self._tokens, on_delete=self._delete_event))
+            layout.addWidget(TranscriptRow(event, self.copy_text, lambda ev: self.show_page("detail", ev), tokens=self._tokens, on_delete=self._delete_event, on_edit=self._edit_event))
         layout.addStretch(1)
         layout.addWidget(self._section_line())
         footer = QHBoxLayout()
@@ -1479,6 +1522,10 @@ class AppShell(QWidget):
                 empty_wrap.addWidget(clock)
                 empty_wrap.addWidget(empty)
                 empty_wrap.addWidget(hint)
+                try_btn = QPushButton("Try a test")
+                try_btn.setFixedHeight(34)
+                try_btn.clicked.connect(self._try_a_test)
+                empty_wrap.addWidget(try_btn, 0, Qt.AlignCenter)
                 box = QWidget()
                 box.setLayout(empty_wrap)
                 host.addWidget(box)
@@ -1489,7 +1536,7 @@ class AppShell(QWidget):
                 header.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
                 host.addWidget(header)
                 for event in rows:
-                    host.addWidget(TranscriptRow(event, self.copy_text, lambda ev: self.show_page("detail", ev), tokens=self._tokens, on_delete=self._delete_event))
+                    host.addWidget(TranscriptRow(event, self.copy_text, lambda ev: self.show_page("detail", ev), tokens=self._tokens, on_delete=self._delete_event, on_edit=self._edit_event, include_group=False))
             host.addStretch(1)
 
         search.textChanged.connect(refresh)
@@ -1530,15 +1577,20 @@ class AppShell(QWidget):
         layout.addLayout(row)
 
     def _edit_event(self, event: DictationEvent) -> None:
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Edit transcript")
-        box = QVBoxLayout(dialog)
+        dialog = HubDialog("Edit transcript", self._tokens, self, width=320, height=260)
         editor = QPlainTextEdit(event.final_text)
-        box.addWidget(editor)
-        buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
-        box.addWidget(buttons)
-        buttons.accepted.connect(dialog.accept)
-        buttons.rejected.connect(dialog.reject)
+        save = QPushButton("Save")
+        save.setObjectName("Primary")
+        cancel = QPushButton("Cancel")
+        cancel.setObjectName("Ghost")
+        row = QHBoxLayout()
+        row.addWidget(cancel)
+        row.addStretch(1)
+        row.addWidget(save)
+        dialog.body.addWidget(editor, 1)
+        dialog.body.addLayout(row)
+        cancel.clicked.connect(dialog.reject)
+        save.clicked.connect(dialog.accept)
         if dialog.exec() == QDialog.Accepted:
             self.store.update_dictation_text(event.id, editor.toPlainText())
             updated = self.store.get_dictation_event(event.id)
@@ -1687,65 +1739,19 @@ class AppShell(QWidget):
 
     def _build_settings(self) -> None:
         layout = self._clear("settings")
-        layout.setSpacing(0)
-        scroll_wrap = QWidget()
-        body = QVBoxLayout(scroll_wrap)
-        body.setContentsMargins(0, 0, 0, 0)
-        body.setSpacing(24)
-        current_preset = stt_preset_from_values(
-            {
-                "stt.model": self.config.stt_model,
-                "stt.device": self.config.stt_device,
-                "stt.compute_type": self.config.stt_compute_type,
-            }
-        )
-        seconds = DragValue(self.config.min_record_seconds, 0.10, 2.00, 0.05, "{:.2f}")
-        rms = DragValue(self.config.min_audio_rms, 0.001, 0.020, 0.001, "{:.3f}")
-        body.addWidget(
-            self._settings_block(
-                "General",
-                [
-                    self._settings_row("Save to clipboard", trailing=self._clipboard_toggle(), tip="Keep the last transcript on the clipboard after paste."),
-                    self._settings_row("Push to talk", trailing=self._ptt_toggle(), tip="Hold the hotkey to record. Release to stop. Off uses press-to-start, press-to-stop."),
-                    self._settings_row(
-                        "Theme",
-                        trailing=self._segmented(
-                            ["Dark", "Light", "System"],
-                            self.theme_preference.capitalize(),
-                            lambda name: self.set_theme(name.lower()),
-                        ),
-                        tip="Dark, light, or follow Windows. Does not change with Space.",
-                    ),
-                    self._hotkey_row(),
-                ],
-            )
-        )
-        body.addWidget(
-            self._settings_block(
-                "Dictation",
-                [
-                    self._settings_row(
-                        "Preset",
-                        trailing=self._segmented(["Fast", "Balanced", "Accurate"], current_preset or "Balanced", self._apply_preset),
-                        tip="Fast is whisper-base, Balanced is small, Accurate is medium. All run locally on CPU.",
-                    ),
-                    self._settings_row("Model", trailing=Select([(model_chip_label(self.config.stt_model), model_chip_label(self.config.stt_model))], model_chip_label(self.config.stt_model), self._tokens), tip="Whisper model chosen by the preset. First run may download it."),
-                    self._settings_row("Language", trailing=self._language_select(), tip="PT + EN transcribes Portuguese and English. It does not translate."),
-                    self._settings_row("Minimum seconds", trailing=seconds, tip="Recordings shorter than this are ignored."),
-                    self._settings_row("Minimum RMS", trailing=rms, tip="Audio quieter than this noise floor is ignored."),
-                    self._drag_save([("dictation.min_record_seconds", seconds), ("dictation.min_audio_rms", rms)]),
-                ],
-            )
-        )
-        body.addWidget(self._settings_block("Microphone", [self._settings_row("Input device", trailing=self._mic_dropdown(), tip="Microphone used for dictation.")]))
-        body.addWidget(self._settings_block("Cloud", [self._settings_row("Coming later", value="WIP", tip="Cloud dictation is not available yet.")]))
-        body.addWidget(self._about_button())
-        body.addStretch(1)
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setWidget(scroll_wrap)
-        self._style_scroll(scroll, scroll_wrap, bars=False)
-        layout.addWidget(scroll, 1)
+        layout.setSpacing(8)
+        for label, page in (
+            ("General", "general"),
+            ("Dictation", "dictation"),
+            ("Microphone", "microphone"),
+            ("Speech recognition", "speech"),
+            ("Privacy", "privacy"),
+            ("Shortcuts", "shortcuts"),
+            ("Appearance", "appearance"),
+            ("About", "about"),
+        ):
+            layout.addWidget(self._nav_row(label, page))
+        layout.addStretch(1)
         footer = QWidget()
         footer.setAttribute(Qt.WA_StyledBackground, True)
         footer.setStyleSheet(f"background-color: {self._tokens['bg']};")
@@ -1755,27 +1761,6 @@ class AppShell(QWidget):
         foot.addWidget(self._footer_button("Dictionary", "book", lambda: self.show_page("dictionary")), 1)
         foot.addWidget(self._footer_button("Snippets", "quote", lambda: self.show_page("snippets")), 1)
         layout.addWidget(footer)
-
-    def _section_header(self, title: str) -> QWidget:
-        wrap = QWidget()
-        row = QHBoxLayout(wrap)
-        row.setContentsMargins(0, 0, 0, 8)
-        row.setSpacing(8)
-        lbl = QLabel(title)
-        lbl.setStyleSheet("font-size:14px; font-weight:600;")
-        row.addWidget(lbl)
-        row.addWidget(self._section_line(), 1)
-        return wrap
-
-    def _settings_block(self, title: str, rows: list[QWidget]) -> QWidget:
-        box = QWidget()
-        col = QVBoxLayout(box)
-        col.setContentsMargins(0, 0, 0, 0)
-        col.setSpacing(0)
-        col.addWidget(self._section_header(title))
-        for row in rows:
-            col.addWidget(row)
-        return box
 
     def _settings_row(self, label: str, trailing: QWidget | None = None, value: str | None = None, tip: str | None = None) -> QWidget:
         wrap = QWidget()
@@ -1796,33 +1781,20 @@ class AppShell(QWidget):
             row.addWidget(trailing, 0, Qt.AlignVCenter)
         return wrap
 
-    def _about_button(self) -> QPushButton:
-        btn = QPushButton("About")
+    def _nav_row(self, label: str, page: str) -> QPushButton:
+        btn = QPushButton(label)
         btn.setObjectName("Chip")
         btn.setFixedHeight(ROW_H)
         btn.setIcon(QIcon(icon_pixmap("chevron-right", self._tokens["text_muted"], canvas=ICON_PX)))
         btn.setIconSize(QSize(ICON_PX, ICON_PX))
         btn.setLayoutDirection(Qt.RightToLeft)
         btn.setFocusPolicy(Qt.NoFocus)
-        btn.clicked.connect(lambda: self.show_page("about"))
+        btn.setCursor(Qt.PointingHandCursor)
+        btn.clicked.connect(lambda: self.show_page(page))
         return btn
 
     def _footer_button(self, label: str, icon: str, on_click, *, primary: bool = False, outline: bool = False) -> QPushButton:
-        btn = QPushButton(f" {label}")
-        if outline:
-            name = "FooterOutline"
-            color = self._tokens["accent"]
-        elif primary:
-            name = "FooterPrimary"
-            color = "#FFFFFF"
-        else:
-            name = "FooterGhost"
-            color = self._tokens["text"]
-        btn.setObjectName(name)
-        btn.setFixedHeight(FOOTER_H)
-        btn.setIcon(QIcon(icon_pixmap(icon, color, size=FOOTER_ICON_PX, canvas=FOOTER_ICON_PX)))
-        btn.setIconSize(QSize(FOOTER_ICON_PX, FOOTER_ICON_PX))
-        btn.setFocusPolicy(Qt.NoFocus)
+        btn = FooterButton(label, self._tokens, primary=primary, outline=outline, icon=icon)
         btn.clicked.connect(on_click)
         return btn
 
@@ -1946,6 +1918,32 @@ class AppShell(QWidget):
         except Exception:
             pass
 
+    def _build_general(self) -> None:
+        layout = self._clear("general")
+        layout.addWidget(self._settings_row("Save to clipboard", trailing=self._clipboard_toggle(), tip="Keep the last transcript on the clipboard after paste."))
+        layout.addWidget(self._settings_row("Push to talk", trailing=self._ptt_toggle(), tip="Hold the hotkey to record. Release to stop. Off uses press-to-start, press-to-stop."))
+        layout.addStretch(1)
+
+    def _build_dictation(self) -> None:
+        layout = self._clear("dictation")
+        seconds = DragValue(self.config.min_record_seconds, 0.10, 2.00, 0.05, "{:.2f}")
+        rms = DragValue(self.config.min_audio_rms, 0.001, 0.020, 0.001, "{:.3f}")
+        layout.addWidget(self._settings_row("Minimum seconds", trailing=seconds, tip="Recordings shorter than this are ignored."))
+        layout.addWidget(self._settings_row("Minimum RMS", trailing=rms, tip="Audio quieter than this noise floor is ignored."))
+        layout.addWidget(self._drag_save([("dictation.min_record_seconds", seconds), ("dictation.min_audio_rms", rms)]))
+        layout.addStretch(1)
+
+    def _build_microphone(self) -> None:
+        layout = self._clear("microphone")
+        layout.addWidget(self._settings_row("Input device", trailing=self._mic_dropdown(), tip="Microphone used for dictation."))
+        layout.addStretch(1)
+
+    def _build_shortcuts(self) -> None:
+        layout = self._clear("shortcuts")
+        layout.addWidget(self._hotkey_row())
+        layout.addWidget(QLabel("Copy last  Shift+Alt+Z"))
+        layout.addStretch(1)
+
     def _build_speech(self) -> None:
         layout = self._clear("speech")
         layout.addWidget(QLabel("Preset"))
@@ -1993,7 +1991,7 @@ class AppShell(QWidget):
         for key in ("stt.model", "stt.device", "stt.compute_type"):
             set_config_value(self.config_path, key, values[key])
         self.config = load_config(self.config_path)
-        self.show_page("settings")
+        self.show_page("speech")
 
     def _build_privacy(self) -> None:
         layout = self._clear("privacy")
@@ -2037,46 +2035,31 @@ class AppShell(QWidget):
             layout.addWidget(QLabel(line))
         layout.addStretch(1)
 
-    def _build_simple(self, page: str, fields: list[tuple[str, str]]) -> None:
-        layout = self._clear(page)
-        values = {
-            "dictation.min_record_seconds": f"{self.config.min_record_seconds:g}",
-            "dictation.min_audio_rms": f"{self.config.min_audio_rms:g}",
-            "injection.restore_clipboard": "true" if self.config.restore_clipboard else "false",
-            "activation.trigger": self.config.activation_trigger,
-            "activation.mode": self.config.activation_mode,
-        }
-        editors: dict[str, QLineEdit] = {}
-        for key, label in fields:
-            layout.addWidget(QLabel(label))
-            editor = QLineEdit(values[key])
-            editors[key] = editor
-            layout.addWidget(editor)
-        save = QPushButton("Save")
-        save.setObjectName("Primary")
-
-        def persist() -> None:
-            for key, editor in editors.items():
-                set_config_value(self.config_path, key, editor.text().strip())
-            self.config = load_config(self.config_path)
-            self.toast.show_message("Saved", self)
-
-        save.clicked.connect(persist)
-        layout.addWidget(save)
-        layout.addStretch(1)
+    def _try_a_test(self) -> None:
+        if self.on_start_recording is not None:
+            self.on_start_recording()
+            return
+        self.show_page("home")
 
 
 def attach_tray(hub: AppShell, *, on_start: Callable[[], None], on_pause: Callable[[], None]) -> QSystemTrayIcon:
+    hub.on_start_recording = on_start
     tray = QSystemTrayIcon(QIcon(tray_icon_pixmap()))
     menu = QMenu()
-    menu.addAction("FastWISPR").setEnabled(False)
-    menu.addAction("Start recording", on_start)
+    caps = "+".join(hotkey_keycaps(hub.config.hotkey))
+    menu.addAction(f"FastWISPR\t{hub.status}").setEnabled(False)
+    menu.addAction(f"Start recording\t{caps}", on_start)
     menu.addAction("Copy last transcript", hub.copy_last)
     menu.addAction("Open FastWISPR", hub.open_hub)
     menu.addAction("History", lambda: (hub.open_hub(), hub.show_page("history")))
     menu.addAction("Settings", lambda: (hub.open_hub(), hub.show_page("settings")))
     menu.addSeparator()
     menu.addAction("Pause hotkeys", on_pause)
+    start_win = menu.addAction("Start with Windows")
+    start_win.setCheckable(True)
+    appdata = os.environ.get("APPDATA")
+    if appdata:
+        start_win.setChecked((Path(appdata) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup" / "FastWispr.lnk").exists())
     menu.addAction("Quit", hub.quit_app)
     tray.setContextMenu(menu)
     tray.activated.connect(lambda reason: hub.open_hub() if reason == QSystemTrayIcon.Trigger else None)
