@@ -28,6 +28,7 @@ from .theme import (
     history_meta_line,
     hotkey_keycaps,
     hub_top_left,
+    language_chip_label,
     model_chip_label,
     preset_label,
     theme_tokens,
@@ -733,42 +734,70 @@ class TranscriptRow(QFrame):
     def __init__(self, event: DictationEvent, on_copy, on_open, tokens: dict[str, str] | None = None, on_delete=None, parent=None, include_group: bool = True):
         super().__init__(parent)
         palette = tokens or theme_tokens("dark")
+        self.setObjectName("HistoryCard")
+        self.setAttribute(Qt.WA_StyledBackground, True)
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+        self.setCursor(Qt.PointingHandCursor)
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 4, 0, 4)
-        layout.setSpacing(8)
+        layout.setContentsMargins(12, 10, 8, 10)
+        layout.setSpacing(4)
         col = QVBoxLayout()
-        col.setSpacing(2)
+        col.setSpacing(6)
         col.setContentsMargins(0, 0, 0, 0)
-        text = QLabel(event.final_text.replace("\n", " ")[:90])
-        text.setWordWrap(True)
-        text.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+        snippet = event.final_text.replace("\n", " ").strip()
+        if len(snippet) > 42:
+            snippet = snippet[:41].rstrip() + "..."
+        text = QLabel(snippet)
+        text.setWordWrap(False)
+        text.setStyleSheet("font-size:13px;")
+        meta_row = QHBoxLayout()
+        meta_row.setContentsMargins(0, 0, 0, 0)
+        meta_row.setSpacing(6)
         meta = QLabel(history_meta_line(event.created_at, event.audio_duration_ms, include_group=include_group))
         meta.setObjectName("Meta")
-        meta.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+        meta_row.addWidget(meta)
+        lang = language_chip_label(event.language)
+        if lang:
+            chip = QLabel(lang)
+            chip.setObjectName("LangChip")
+            chip.setAlignment(Qt.AlignCenter)
+            chip.setFixedHeight(16)
+            chip.setMinimumWidth(24)
+            meta_row.addWidget(chip)
+        meta_row.addStretch(1)
         col.addWidget(text)
-        col.addWidget(meta)
+        col.addLayout(meta_row)
         layout.addLayout(col, 1)
-        copy_btn = QPushButton()
-        copy_btn.setObjectName("CopyBtn")
-        copy_btn.setFixedSize(COPY_BTN, COPY_BTN)
-        copy_btn.setToolTip("Copy")
-        copy_btn.setFocusPolicy(Qt.NoFocus)
-        copy_btn.setIcon(QIcon(icon_pixmap("copy", palette["text_secondary"], size=ICON_PX, canvas=28)))
-        copy_btn.setIconSize(QSize(ICON_PX, ICON_PX))
-        copy_btn.clicked.connect(lambda: on_copy(event.final_text))
-        layout.addWidget(copy_btn, 0, Qt.AlignTop)
+
+        def icon_btn(name: str, tip: str, on_click) -> QPushButton:
+            btn = QPushButton()
+            btn.setObjectName("CopyBtn")
+            btn.setFixedSize(24, 24)
+            btn.setToolTip(tip)
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.setFocusPolicy(Qt.NoFocus)
+            btn.setIcon(QIcon(icon_pixmap(name, palette["text_secondary"], size=16, canvas=24)))
+            btn.setIconSize(QSize(16, 16))
+            btn.clicked.connect(on_click)
+            return btn
+
+        layout.addWidget(icon_btn("copy", "Copy", lambda: on_copy(event.final_text)), 0, Qt.AlignTop)
+        layout.addWidget(icon_btn("pencil", "Edit", lambda: on_open(event)), 0, Qt.AlignTop)
+        menu = QMenu(self)
         if on_delete is not None:
-            delete_btn = QPushButton()
-            delete_btn.setObjectName("CopyBtn")
-            delete_btn.setFixedSize(COPY_BTN, COPY_BTN)
-            delete_btn.setToolTip("Delete")
-            delete_btn.setFocusPolicy(Qt.NoFocus)
-            delete_btn.setIcon(QIcon(icon_pixmap("trash", palette["text_muted"], size=ICON_PX, canvas=28)))
-            delete_btn.setIconSize(QSize(ICON_PX, ICON_PX))
-            delete_btn.clicked.connect(lambda: on_delete(event))
-            layout.addWidget(delete_btn, 0, Qt.AlignTop)
-        self.mousePressEvent = lambda ev: on_open(event) if ev.button() == Qt.LeftButton else None  # type: ignore[method-assign]
+            menu.addAction("Delete", lambda: on_delete(event))
+        more = icon_btn("more", "More", lambda: menu.exec(more.mapToGlobal(more.rect().bottomLeft())) if not menu.isEmpty() else None)
+        layout.addWidget(more, 0, Qt.AlignTop)
+        self._open = on_open
+        self._event = event
+
+    def mouseReleaseEvent(self, event) -> None:  # noqa: N802
+        if event.button() == Qt.LeftButton:
+            pos = event.position().toPoint() if hasattr(event, "position") else event.pos()
+            child = self.childAt(pos)
+            if not isinstance(child, QPushButton):
+                self._open(self._event)
+        super().mouseReleaseEvent(event)
 
 
 class Toast(QWidget):
@@ -1416,7 +1445,7 @@ class AppShell(QWidget):
         search.setFixedHeight(34)
         layout.addWidget(search)
         host = QVBoxLayout()
-        host.setSpacing(2)
+        host.setSpacing(8)
         host.setContentsMargins(0, 0, 0, 0)
         scroll_wrap = QWidget()
         scroll_wrap.setLayout(host)
@@ -1460,7 +1489,7 @@ class AppShell(QWidget):
                 header.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
                 host.addWidget(header)
                 for event in rows:
-                    host.addWidget(TranscriptRow(event, self.copy_text, lambda ev: self.show_page("detail", ev), tokens=self._tokens, on_delete=self._delete_event, include_group=False))
+                    host.addWidget(TranscriptRow(event, self.copy_text, lambda ev: self.show_page("detail", ev), tokens=self._tokens, on_delete=self._delete_event))
             host.addStretch(1)
 
         search.textChanged.connect(refresh)

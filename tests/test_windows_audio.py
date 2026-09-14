@@ -78,13 +78,18 @@ def test_list_input_devices_keeps_mics_and_drops_duplicates():
                 {"name": "Speakers (Realtek)", "max_input_channels": 2, "hostapi": 1},
                 {"name": "Stereo Mix (Realtek)", "max_input_channels": 2, "hostapi": 1},
                 {"name": "Microsoft Sound Mapper - Input", "max_input_channels": 2, "hostapi": 0},
-                {"name": "Microphone (Realtek Audio)", "max_input_channels": 2, "hostapi": 0},
-                {"name": "Microphone (Realtek Audio)", "max_input_channels": 2, "hostapi": 1},
-                {"name": "Headset Microphone", "max_input_channels": 1, "hostapi": 1},
+                {"name": "Microphone Array (Realtek(R) Audio)", "max_input_channels": 2, "hostapi": 1},
+                {"name": "Microphone Array (Realtek(R) Audio)", "max_input_channels": 2, "hostapi": 0},
+                {"name": "Headphones (Rodrigo's AirPods Pro)", "max_input_channels": 1, "hostapi": 0},
+                {"name": "Headset (Rodrigo's AirPods Pro Hands-Free AG Audio)", "max_input_channels": 1, "hostapi": 0},
                 {"name": "Webcam", "max_input_channels": 1, "hostapi": 1},
                 {"name": "Speakers (loopback)", "max_input_channels": 2, "hostapi": 1},
             ]
 
     from fastwispr.windows.audio import list_input_devices
 
-    assert list_input_devices(Fake()) == ["Microphone (Realtek Audio)", "Headset Microphone", "Webcam"]
+    assert list_input_devices(Fake()) == [
+        "Microphone Array (Realtek(R) Audio)",
+        "Webcam",
+        "Headphones (Rodrigo's AirPods Pro)",
+    ]

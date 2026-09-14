@@ -46,7 +46,7 @@ def test_home_copy_uses_real_model_and_ctrl_space():
 def test_lucide_icon_catalog_covers_chrome():
     from fastwispr.gui.icons import ICON_NAMES, ICON_PX
 
-    for name in ("sun", "moon", "minus", "x", "copy", "chevron-left", "chevron-right", "chevron-down", "settings", "book", "quote", "mic", "trash"):
+    for name in ("sun", "moon", "minus", "x", "copy", "chevron-left", "chevron-right", "chevron-down", "settings", "book", "quote", "mic", "trash", "pencil", "more"):
         assert name in ICON_NAMES
     assert ICON_PX == 22
 
@@ -70,6 +70,15 @@ def test_history_grouping():
     assert history_group_label("2026-09-12 17:42:00", now) == "Yesterday"
     assert "13:42" in history_meta_line("2026-09-13 13:42:00", 4800, now)
     assert history_meta_line("2026-09-13 13:42:00", 4800, now, include_group=False) == "13:42 · 4.8s"
+
+
+def test_language_chip_label():
+    from fastwispr.gui.theme import language_chip_label
+
+    assert language_chip_label("en") == "EN"
+    assert language_chip_label("pt-br") == "PT"
+    assert language_chip_label("auto") == ""
+    assert language_chip_label(None) == ""
 
 
 def test_footer_ghost_hover_is_subtle():

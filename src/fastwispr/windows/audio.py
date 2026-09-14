@@ -10,9 +10,8 @@ import time
 from typing import Any
 import wave
 
-_MIC_KEEP = re.compile(r"mic|microfone|microphone|headset|webcam|camera|\bcam\b|array|hands-free|handsfree", re.I)
 _MIC_SKIP = re.compile(
-    r"loopback|stereo mix|what u hear|wave out|mapper|primary sound|hdmi|display audio|line in",
+    r"loopback|stereo mix|what u hear|wave out|mapper|primary sound|hdmi|display audio",
     re.I,
 )
 
@@ -38,13 +37,19 @@ def _device_int(item: Any, key: str) -> int:
 def _canon_device_name(name: str) -> str:
     text = re.sub(r"\s+", " ", name.strip().lower())
     text = re.sub(r"^\[\w+]\s*", "", text)
+    if re.search(r"headset|headphone|airpods|hands-free|bluetooth", text):
+        inner = re.search(r"\(([^)]+)\)", text)
+        if inner:
+            core = re.sub(r"\s*(hands-free.*|ag audio|stereo)\s*$", "", inner.group(1)).strip()
+            if core:
+                return core
     return text
 
 
-def _is_microphone_name(name: str) -> bool:
-    if not name or _MIC_SKIP.search(name) or not _MIC_KEEP.search(name):
+def _is_capture_name(name: str) -> bool:
+    if not name or _MIC_SKIP.search(name):
         return False
-    if re.search(r"earphone|headphone", name, re.I) and not re.search(r"mic|microphone|microfone", name, re.I):
+    if re.search(r"\bspeakers?\b", name, re.I) and not re.search(r"mic|microphone|headset", name, re.I):
         return False
     return True
 
@@ -67,19 +72,24 @@ def list_input_devices(sd_module: Any | None = None) -> list[str]:
     except Exception:
         return []
     prefer = _wasapi_index(sd)
-    return _pick_microphones(devices, prefer) or _pick_microphones(devices, None)
+    wasapi: list[Any] = []
+    other: list[Any] = []
+    for item in devices:
+        if prefer is not None and _device_int(item, "hostapi") == prefer:
+            wasapi.append(item)
+        else:
+            other.append(item)
+    return _pick_capture_devices(wasapi + other)
 
 
-def _pick_microphones(devices: list[Any], hostapi: int | None) -> list[str]:
+def _pick_capture_devices(devices: list[Any]) -> list[str]:
     names: list[str] = []
     seen: set[str] = set()
     for item in devices:
         if _device_int(item, "max_input_channels") <= 0:
             continue
-        if hostapi is not None and _device_int(item, "hostapi") != hostapi:
-            continue
         name = _device_name(item)
-        if not _is_microphone_name(name):
+        if not _is_capture_name(name):
             continue
         key = _canon_device_name(name)
         if key in seen:

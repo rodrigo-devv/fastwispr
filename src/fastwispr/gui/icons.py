@@ -21,6 +21,8 @@ ICON_NAMES = (
     "quote",
     "mic",
     "trash",
+    "pencil",
+    "more",
 )
 
 
@@ -135,3 +137,14 @@ def _stroke(painter, name: str) -> None:
         painter.drawRoundedRect(6, 7, 12, 13, 2, 2)
         painter.drawLine(10, 11, 10, 16)
         painter.drawLine(14, 11, 14, 16)
+    elif name == "pencil":
+        painter.drawLine(13, 5, 19, 11)
+        painter.drawLine(19, 11, 8, 22)
+        painter.drawLine(8, 22, 2, 22)
+        painter.drawLine(2, 22, 2, 16)
+        painter.drawLine(2, 16, 13, 5)
+        painter.drawLine(11, 7, 17, 13)
+    elif name == "more":
+        painter.drawEllipse(4.5, 10.5, 3, 3)
+        painter.drawEllipse(10.5, 10.5, 3, 3)
+        painter.drawEllipse(16.5, 10.5, 3, 3)

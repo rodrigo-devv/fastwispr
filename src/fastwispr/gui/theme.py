@@ -152,6 +152,17 @@ def history_meta_line(created_at: str, duration_ms: int | None, now: datetime | 
     return f"{group} · {clock} · {duration}"
 
 
+def language_chip_label(language: str | None) -> str:
+    code = (language or "").strip()
+    if not code or code.lower() in {"auto", "unknown"}:
+        return ""
+    if code.lower() in {"pt", "por", "portuguese", "pt-br", "pt_br"}:
+        return "PT"
+    if code.lower() in {"en", "eng", "english"}:
+        return "EN"
+    return code[:2].upper()
+
+
 def preset_label(stt_model: str) -> str:
     mapping = {"base": "Fast", "small": "Balanced", "medium": "Accurate"}
     return mapping.get(stt_model, "Custom")
@@ -400,10 +411,10 @@ QPushButton#CopyBtn {{
   background: transparent;
   border: 1px solid transparent;
   border-radius: 5px;
-  min-width: 28px;
-  max-width: 28px;
-  min-height: 28px;
-  max-height: 28px;
+  min-width: 24px;
+  max-width: 24px;
+  min-height: 24px;
+  max-height: 24px;
   padding: 0px;
 }}
 QPushButton#CopyBtn:hover {{
@@ -536,6 +547,22 @@ QFrame#Card, QFrame#Chip, QFrame#Keycap {{
   background: {tokens['surface']};
   border: 1px solid {tokens['border']};
   border-radius: 5px;
+}}
+QFrame#HistoryCard {{
+  background: {tokens['surface']};
+  border: 1px solid {tokens['border']};
+  border-radius: 12px;
+}}
+QLabel#LangChip {{
+  color: {tokens['text_secondary']};
+  background: transparent;
+  border: 1px solid {tokens['border']};
+  border-radius: 8px;
+  padding: 0 6px;
+  font-size: 10px;
+  font-weight: 600;
+  min-height: 16px;
+  max-height: 16px;
 }}
 QFrame#TranscriptPanel {{
   background: {tokens['surface']};
