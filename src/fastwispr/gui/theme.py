@@ -229,12 +229,17 @@ QPushButton {{
   min-height: 34px;
   font-family: "Segoe UI", sans-serif;
 }}
-QPushButton:hover {{
+QPushButton:enabled:hover {{
   background: {tokens['surface_hover']};
   border-color: {tokens['border_hover']};
 }}
 QPushButton:focus {{
   border: 1px solid {tokens['accent']};
+}}
+QPushButton:disabled {{
+  background: {tokens['surface']};
+  color: {tokens['text_muted']};
+  border: 1px solid {tokens['border']};
 }}
 QPushButton#Primary {{
   background: {tokens['accent']};
@@ -257,14 +262,16 @@ QPushButton#SaveMini {{
   max-height: 28px;
   min-width: 78px;
 }}
-QPushButton#SaveMini:hover {{
+QPushButton#SaveMini:enabled:hover {{
   background: {tokens['accent_hover']};
+  border: 1px solid {tokens['accent_hover']};
 }}
 QPushButton#SaveMini:pressed {{
   background: {tokens['accent']};
   padding-top: 1px;
 }}
-QPushButton#SaveMini:disabled {{
+QPushButton#SaveMini:disabled,
+QPushButton#SaveMini:disabled:hover {{
   background: {tokens['surface']};
   color: {tokens['text_muted']};
   border: 1px solid {tokens['border']};
@@ -281,11 +288,18 @@ QPushButton#QuietMini {{
   max-height: 28px;
   min-width: 72px;
 }}
-QPushButton#QuietMini:hover {{
+QPushButton#QuietMini:enabled:hover {{
   background: {tokens['surface_hover']};
+  border: 1px solid {tokens['border_hover']};
 }}
 QPushButton#QuietMini:pressed {{
   padding-top: 1px;
+}}
+QPushButton#QuietMini:disabled,
+QPushButton#QuietMini:disabled:hover {{
+  background: {tokens['surface']};
+  color: {tokens['text_muted']};
+  border: 1px solid {tokens['border']};
 }}
 QPushButton#FooterGhost {{
   background: {tokens['surface']};

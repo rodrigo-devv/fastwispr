@@ -1779,6 +1779,7 @@ class AppShell(QWidget):
         btn.setObjectName("SaveMini" if primary else "QuietMini")
         btn.setFixedHeight(28)
         btn.setMinimumWidth(72)
+        btn.setCursor(Qt.PointingHandCursor)
         btn.setFocusPolicy(Qt.NoFocus)
         return btn
 

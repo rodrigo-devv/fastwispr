@@ -4,10 +4,89 @@ from collections.abc import Callable
 from pathlib import Path
 from threading import Event
 import math
+import re
 import struct
 import time
 from typing import Any
 import wave
+
+_MIC_KEEP = re.compile(r"mic|microfone|microphone|headset|webcam|camera|\bcam\b|array|hands-free|handsfree", re.I)
+_MIC_SKIP = re.compile(
+    r"loopback|stereo mix|what u hear|wave out|mapper|primary sound|hdmi|display audio|line in",
+    re.I,
+)
+
+
+def _device_name(item: Any) -> str:
+    if isinstance(item, dict):
+        return str(item.get("name") or "").strip()
+    try:
+        return str(item["name"]).strip()
+    except Exception:
+        return str(getattr(item, "name", "") or "").strip()
+
+
+def _device_int(item: Any, key: str) -> int:
+    try:
+        if isinstance(item, dict):
+            return int(item.get(key) or 0)
+        return int(item[key] or 0)
+    except Exception:
+        return 0
+
+
+def _canon_device_name(name: str) -> str:
+    text = re.sub(r"\s+", " ", name.strip().lower())
+    text = re.sub(r"^\[\w+]\s*", "", text)
+    return text
+
+
+def _is_microphone_name(name: str) -> bool:
+    if not name or _MIC_SKIP.search(name) or not _MIC_KEEP.search(name):
+        return False
+    if re.search(r"earphone|headphone", name, re.I) and not re.search(r"mic|microphone|microfone", name, re.I):
+        return False
+    return True
+
+
+def _wasapi_index(sd: Any) -> int | None:
+    try:
+        for index, api in enumerate(sd.query_hostapis()):
+            label = str(api.get("name") if isinstance(api, dict) else api["name"]).lower()
+            if "wasapi" in label:
+                return index
+    except Exception:
+        return None
+    return None
+
+
+def list_input_devices(sd_module: Any | None = None) -> list[str]:
+    try:
+        sd = sd_module or __import__("sounddevice")
+        devices = list(sd.query_devices())
+    except Exception:
+        return []
+    prefer = _wasapi_index(sd)
+    return _pick_microphones(devices, prefer) or _pick_microphones(devices, None)
+
+
+def _pick_microphones(devices: list[Any], hostapi: int | None) -> list[str]:
+    names: list[str] = []
+    seen: set[str] = set()
+    for item in devices:
+        if _device_int(item, "max_input_channels") <= 0:
+            continue
+        if hostapi is not None and _device_int(item, "hostapi") != hostapi:
+            continue
+        name = _device_name(item)
+        if not _is_microphone_name(name):
+            continue
+        key = _canon_device_name(name)
+        if key in seen:
+            continue
+        seen.add(key)
+        names.append(name)
+    return names
 
 
 def int16_rms_level(data: bytes) -> float:
@@ -20,23 +99,6 @@ def int16_rms_level(data: bytes) -> float:
     if total == 0:
         return 0.0
     return min(1.0, math.sqrt(total / sample_count) / 32767.0)
-
-
-def list_input_devices(sd_module: Any | None = None) -> list[str]:
-    try:
-        sd = sd_module or __import__("sounddevice")
-        names: list[str] = []
-        seen: set[str] = set()
-        for item in sd.query_devices():
-            if int(item.get("max_input_channels") or 0) <= 0:
-                continue
-            name = str(item.get("name") or "").strip()
-            if name and name not in seen:
-                seen.add(name)
-                names.append(name)
-        return names
-    except Exception:
-        return []
 
 
 class SounddeviceRecorder:

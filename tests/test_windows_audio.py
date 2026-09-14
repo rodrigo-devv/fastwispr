@@ -68,16 +68,23 @@ def test_sounddevice_recorder_records_until_stop_and_reports_level(tmp_path: Pat
         assert fh.readframes(4) == b"\x01\x00\x02\x00\x03\x00\x04\x00"
 
 
-def test_list_input_devices_skips_outputs():
+def test_list_input_devices_keeps_mics_and_drops_duplicates():
     class Fake:
+        def query_hostapis(self):
+            return [{"name": "MME"}, {"name": "Windows WASAPI"}]
+
         def query_devices(self):
             return [
-                {"name": "Speakers", "max_input_channels": 0},
-                {"name": "Headset Mic", "max_input_channels": 1},
-                {"name": "Headset Mic", "max_input_channels": 2},
-                {"name": "Webcam", "max_input_channels": 1},
+                {"name": "Speakers (Realtek)", "max_input_channels": 2, "hostapi": 1},
+                {"name": "Stereo Mix (Realtek)", "max_input_channels": 2, "hostapi": 1},
+                {"name": "Microsoft Sound Mapper - Input", "max_input_channels": 2, "hostapi": 0},
+                {"name": "Microphone (Realtek Audio)", "max_input_channels": 2, "hostapi": 0},
+                {"name": "Microphone (Realtek Audio)", "max_input_channels": 2, "hostapi": 1},
+                {"name": "Headset Microphone", "max_input_channels": 1, "hostapi": 1},
+                {"name": "Webcam", "max_input_channels": 1, "hostapi": 1},
+                {"name": "Speakers (loopback)", "max_input_channels": 2, "hostapi": 1},
             ]
 
     from fastwispr.windows.audio import list_input_devices
 
-    assert list_input_devices(Fake()) == ["Headset Mic", "Webcam"]
+    assert list_input_devices(Fake()) == ["Microphone (Realtek Audio)", "Headset Microphone", "Webcam"]
